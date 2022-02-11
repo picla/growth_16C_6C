@@ -5,9 +5,14 @@ We investigated early vegetative growth of natural Arabidopsis thaliana accessio
 ## Table of contents
 1. [Experimental setup](#ExperimentalSetup)
 2. [Data files](#DataFiles)
+3. [Dependencies](#Dependencies)
 
 ## Experimental setup <a name="ExperimentalSetup"></a>
 
 
 ## Data files <a name="DataFiles"></a>
 
+## Dependencies <a name="Dependencies"></a>
+
+### R
+[R](https://www.r-project.org/) version 4.0.3 with [bioconductor](https://bioconductor.org/) version 3.11
