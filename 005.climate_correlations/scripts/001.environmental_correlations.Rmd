@@ -1,0 +1,361 @@
+---
+title: "001.climate_correlations"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(coxme)
+library(rhdf5)
+library(ggdendro)
+library(wesanderson)
+library(cowplot)
+library(ggpubr)
+```
+
+```{r data}
+# growth phenotypes
+pheno <- read_csv('../../003.growth_parameters/results/phenotypes.csv') %>%
+  mutate(accession = as.factor(accession))
+
+# worldclim data
+worldclim <- read_csv('../../001.data/2029_modified_MN_SH_wc2.0_30s_bilinear.csv') %>%
+  mutate(accession = as.factor(accession))
+
+# meta info for all accessions
+meta <- read_csv('../../001.data/1001genomes-accessions.csv') %>%
+  mutate(ecotype_id = as.factor(ecotype_id)) %>% rename(accession = ecotype_id)
+
+# admixture group coloring
+admx.col <- tibble(group = unique(meta$group), color = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a"))
+
+# open kinship hdf5
+K_hdf <- H5Fopen("../../001.data/kinship_ibs_binary_mac5.h5py")
+```
+
+```{r functions}
+# function for correlations of phenotype and climate variables
+cor.r.p <- function(pheno, clim, cor.data = growthClim)
+{
+  pheno <- as.character(pheno)
+  clim <- as.character(clim)
+  
+  cor.data.df <- cor.data %>%
+  select(!!pheno, !!clim) %>%
+  as.data.frame()
+  
+  cor.reslt <- cor.test(cor.data.df[,1], cor.data.df[,2])
+  r <- as.numeric(cor.reslt$estimate)
+  p <- as.numeric(cor.reslt$p.value)
+  return(tibble(
+    'phenotype' = pheno,
+    'climateVariable' = clim,
+    'r' = r,
+    'pVal' = p
+  ))
+}
+
+# function to extract results from lmekin linear mixed effects model
+extract_coxme_table <- function (mod){
+    beta <- mod$coefficients$fixed
+    nvar <- length(beta)
+    nfrail <- nrow(mod$var) - nvar
+    se <- sqrt(diag(mod$var)[nfrail + 1:nvar])
+    z <- round(beta/se, 2)
+    p <- signif(1 - pchisq((beta/se)^2, 1), 2)
+    table <- tibble(beta = beta, se = se, z = z, pVal = p)
+    return(table)
+}
+
+# function for population corrected correlation of phenotype and climate variables 
+K.corr.lmm <- function(pheno, clim, kin = K, cor.data = growthClim)
+{
+  pheno <- as.character(pheno)
+  clim <- as.character(clim)
+  
+  cor.data.df <- cor.data %>%
+    select(accession, !!pheno, !!clim) %>%
+    rename('phenotype' = !!pheno, 'climateVar' = !!clim) %>%
+    mutate(phenotype = scale(phenotype),
+           climateVar = scale(climateVar)) %>%
+    as.data.frame()
+  
+
+  lmm.fit <- lmekin(phenotype ~ climateVar + (1|accession), data = cor.data.df, varlist = kin)
+  
+  
+  results.tbl <- extract_coxme_table(lmm.fit) %>%
+    mutate(phenotype = pheno,
+           climateVariable = clim,
+           factor = c('intercept', 'climate.var'))
+  return(results.tbl)
+}
+
+# heatmap data matrix
+heatmap.matrix <- function(data.tbl, rows, columns, values)
+{
+  data.tbl.wide <- data.tbl %>%
+    dplyr::select(!!rows, !!columns, !!values) %>%
+  pivot_wider(names_from = !!columns, values_from = !!values)
+  data.tbl.mtrx <- as.matrix(data.tbl.wide[, -1])
+  rownames(data.tbl.mtrx) <- data.tbl.wide[[rows]]
+  return(data.tbl.mtrx)
+}
+
+# row dendrograms
+heatmap.dendro.row <- function(heatmap.mtrx, k, dist.method = 'euclidean', clust.method = 'ward.D2')
+{
+  clust.row <- hclust(dist(heatmap.mtrx, method = dist.method), method = clust.method)
+  dd.row <- as.dendrogram(clust.row)
+  row.ord <- order.dendrogram(dd.row)
+  ordered_row_names <- row.names(heatmap.mtrx[row.ord, ])
+  dendro_data_row <- dendro_data(dd.row, type = "rectangle")
+  
+  row.clust <- cutree(clust.row, k = k)
+  clust.df <- data.frame(label=names(row.clust), cluster=factor(row.clust))
+  dendro_data_row[["labels"]]   <- merge(dendro_data_row[["labels"]],clust.df, by="label")
+  rect <- aggregate(x~cluster,label(dendro_data_row),range)
+  rect <- data.frame(rect$cluster,rect$x)
+  rect$mid <- rowMeans(rect[, c(2, 3)])
+  ymax <- mean(clust.row$height[length(clust.row$height)-((k-2):(k-1))])
+  
+  return(list('ordered_row_names' = ordered_row_names,
+              'dendro_data_row' = dendro_data_row,
+              'row.clust' = row.clust,
+              'rect' = rect,
+              'ymax' = ymax))
+}
+
+# col dendrograms
+heatmap.dendro.col <- function(heatmap.mtrx, dist.method = 'euclidean', clust.method = 'ward.D2')
+{
+  clust.col <- hclust(dist(t(heatmap.mtrx), method = dist.method), method = clust.method)
+  dd.col <- as.dendrogram(clust.col)
+  col.ord <- order.dendrogram(dd.col)
+  ordered_col_names <- colnames(heatmap.mtrx[, col.ord])
+  dendro_data_col <- dendro_data(dd.col, type = "rectangle")
+  return(list('ordered_col_names' = ordered_col_names,
+              'dendro_data_col' = dendro_data_col))
+}
+```
+```{r general variables}
+# select phenotypes
+phenotypes <- colnames(pheno)[c(2:5)]
+
+# select climate variables
+clim.vars <- colnames(worldclim)[-1]
+clim.vars.season <- clim.vars[grepl('.*_.*[_.*]+.*', clim.vars) | grepl('bio.*', clim.vars)]
+```
+```{r phenotype and climate descriptions}
+clim.descr <- tibble(climateVar = clim.vars.season, description = clim.vars.season) %>%
+  mutate(description = str_replace_all(description, c('01_02_03' = '1st quart.',
+                                         '04_05_06' = '2nd quart.',
+                                         '07_08_09' = '3rd quart.',
+                                         '10_11_12' = '4th quart.')),
+         description = str_replace_all(description, c('bio_01' = 'annual avg. temp.',
+                                                      'bio_02' = 'mean diurnal range',
+                                                      'bio_03' = 'isothermality',
+                                                      'bio_04' = 'temp. seasonality',
+                                                      'bio_05' = 'max. temp. warmest month',
+                                                      'bio_06' = 'min. temp. coldest month',
+                                                      'bio_07' = 'temp. annual range',
+                                                      'bio_08' = 'mean temp. wettest quart.',
+                                                      'bio_09' = 'mean temp. driest quart.',
+                                                      'bio_10' = 'mean temp. warmest quart.',
+                                                      'bio_11' = 'mean temp. coldest quart.',
+                                                      'bio_12' = 'annual prec.',
+                                                      'bio_13' = 'prec. wettest month',
+                                                      'bio_14' = 'prec. driest month',
+                                                      'bio_15' = 'prec. seasonality',
+                                                      'bio_16' = 'prec. wettest quart.',
+                                                      'bio_17' = 'prec. driest quart.',
+                                                      'bio_18' = 'prec. warmest quart.',
+                                                      'bio_19' = 'prec. coldest quart.')),
+         description = str_replace_all(description, c('prec_' = 'prec. ',
+                                                      'tavg_' = 'mean temp.',
+                                                      'tmin_' = 'min. temp. ',
+                                                      'tmax_' = 'max. temp. ',
+                                                      'srad_' = 'solar rad. ',
+                                                      'vapr_' = 'water vap. press. ',
+                                                      'wind_' = 'wind speed ')))
+# make named vectors for str_replace
+clim.descr.vctr <- clim.descr$description
+names(clim.descr.vctr) <- clim.descr$climateVar
+
+# create phenotype labels
+pheno.labels <- c('M0' = expression(paste('initial size (', italic('M0'), ')')),
+                  'r_16C' = expression(paste('growth rate (', italic('r'), ') 16ºC')),
+                  'r_6C' = expression(paste('growth rate (', italic('r'), ') 6ºC')),
+                  'r_response' = expression(paste('growth rate (', italic('r'), ') temp. response')))
+
+
+```
+```{r combine growth and climate data}
+phenoClim <- pheno %>%
+  dplyr::select(accession, all_of(phenotypes)) %>%
+  left_join(dplyr::select(worldclim, accession, longitude, latitude, all_of(clim.vars.season)), by = 'accession')
+```
+
+```{r correlate phenotypes and climate variables}
+pheno.clim <- expand_grid(phenotype = phenotypes, clim.var = clim.vars.season)
+phenoClim.cor <- map2(pheno.clim$phenotype, pheno.clim$clim.var, cor.r.p, cor.data = phenoClim) %>%
+  bind_rows() %>%
+  mutate(p.adj = p.adjust(pVal, method = 'BH'))
+```
+
+```{r correlate phenotypes and climate variables - population structure corrected}
+# prepare kinship matrix
+K <- K_hdf$kinship
+colnames(K) <- K_hdf$accessions
+rownames(K) <- K_hdf$accessions
+K <- K[as.character(phenoClim$accession), as.character(phenoClim$accession)]
+
+pheno.clim <- expand_grid(phenotype = phenotypes, clim.var = clim.vars.season)
+phenoClim.cor.K <- map2(pheno.clim$phenotype, pheno.clim$clim.var, K.corr.lmm, cor.data = phenoClim, kin = K) %>%
+  bind_rows() %>%
+  mutate(p.adj = p.adjust(pVal, method = 'BH'))
+```
+
+```{r correlation heatmap}
+phenoClim.cor.mtrx <- heatmap.matrix(
+  phenoClim.cor,
+  rows = 'climateVariable',
+  columns = 'phenotype',
+  values = 'r')
+
+# make climate dendrogram
+row.dendro <- heatmap.dendro.row(phenoClim.cor.mtrx, k = 1)
+row.dendro$ordered_descriptions <- str_replace_all(row.dendro$ordered_row_names, clim.descr.vctr)
+
+# make phenotype dendrogram
+col.dendro <- heatmap.dendro.col(phenoClim.cor.mtrx)
+
+# make heatmap
+heat_plot <- phenoClim.cor %>%
+  mutate(
+    climateVariable = factor(climateVariable, levels = row.dendro$ordered_row_names, ordered = T),
+    phenotype = factor(phenotype, levels = col.dendro$ordered_col_names, ordered = T),
+    pval.stars = cut(p.adj, breaks = c(-Inf, 0.05, Inf), label = c('x', '')),
+    climateVariable.descr = factor(str_replace_all(climateVariable, clim.descr.vctr), levels = row.dendro$ordered_descriptions, ordered = T)) %>%
+  ggplot(aes(phenotype, climateVariable.descr)) +
+  geom_tile(aes(fill = r), colour = 'white') +
+  scale_fill_gradient2(low = wes_palette('Darjeeling1')[5], high = wes_palette('Darjeeling1')[3], mid  = 'white') +
+  geom_text(aes(label = pval.stars), color="black", size=1) +
+  labs(x = '', y = '') +
+  scale_x_discrete(position = 'bottom', labels = pheno.labels) +
+  scale_y_discrete(position = 'right') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        legend.position = 'right')
+
+# plot row dendrogram
+dendro_row <- axis_canvas(heat_plot, axis = "y", coord_flip = TRUE) + 
+  geom_segment(data = segment(row.dendro$dendro_data_row), aes(y = -y, x = x, xend = xend, yend = -yend), size = 0.2) +
+    coord_flip() +
+  theme_dendro()
+
+# plot column dendrogram
+dendro_col <- axis_canvas(heat_plot, axis = "x") + 
+  geom_segment(data = segment(col.dendro$dendro_data_col), aes(x = x, y = y, xend = xend, yend = yend), size = 0.2)
+
+# plot heatmap
+final_plot <- heat_plot
+
+# add column dendrogram
+final_plot <- 
+  insert_xaxis_grob(final_plot, dendro_col, unit(0.2, "null"), position = "top")
+
+# add row dendrogram  with clusters to heatmap
+final_plot <- insert_yaxis_grob(final_plot, dendro_row, unit(0.2, "null"), position = "left")
+    
+ggdraw(final_plot)
+
+ggsave(final_plot, filename = '../figures/correlations_growth_climate.pdf', width = 8, height = 14)
+```
+
+```{r population structure corrected correlation heatmap}
+phenoClim.cor.K.mtrx <- phenoClim.cor.K %>%
+  filter(factor == 'climate.var') %>%
+  heatmap.matrix(., rows = 'climateVariable', columns = 'phenotype', values = 'beta')
+
+# make climate dendrogram
+row.dendro <- heatmap.dendro.row(phenoClim.cor.K.mtrx, k = 1)
+row.dendro$ordered_descriptions <- str_replace_all(row.dendro$ordered_row_names, clim.descr.vctr)
+
+# make phenotye dendrogram
+col.dendro <- heatmap.dendro.col(phenoClim.cor.K.mtrx)
+
+# make heatmap
+heat_plot <- phenoClim.cor.K %>%
+  filter(factor == 'climate.var') %>%
+  mutate(
+    climateVariable = factor(climateVariable, levels = row.dendro$ordered_row_names, ordered = T),
+    phenotype = factor(phenotype, levels = col.dendro$ordered_col_names, ordered = T),
+    pval.stars = cut(p.adj, breaks = c(-Inf, 0.05, Inf), label = c('x', '')),
+    climateVariable.descr = factor(str_replace_all(climateVariable, clim.descr.vctr), levels = row.dendro$ordered_descriptions, ordered = T)) %>%
+  ggplot(aes(phenotype, climateVariable.descr)) +
+  geom_tile(aes(fill = beta), colour = 'white') +
+  scale_fill_gradient2(low = wes_palette('Darjeeling1')[5], high = wes_palette('Darjeeling1')[3], mid  = 'white') +
+  geom_text(aes(label = pval.stars), color="black", size=1) +
+  labs(x = '', y = '') +
+  scale_x_discrete(position = "bottom", labels = pheno.labels) +
+  scale_y_discrete(position = 'right') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        legend.position = 'right')
+
+# plot row dendrogram
+dendro_row <- axis_canvas(heat_plot, axis = "y", coord_flip = TRUE) + 
+  geom_segment(data = segment(row.dendro$dendro_data_row), aes(y = -y, x = x, xend = xend, yend = -yend), size = 0.2) +
+    coord_flip() +
+  theme_dendro()
+
+# plot column dendrogram
+dendro_col <- axis_canvas(heat_plot, axis = "x") + 
+  geom_segment(data = segment(col.dendro$dendro_data_col), aes(x = x, y = y, xend = xend, yend = yend), size = 0.2)
+
+# plot heatmap
+final_plot <- heat_plot
+
+# add column dendrogram
+final_plot <- 
+  insert_xaxis_grob(final_plot, dendro_col, unit(0.2, "null"), position = "top")
+
+# add row dendrogram  with clusters to heatmap
+final_plot <- insert_yaxis_grob(final_plot, dendro_row, unit(0.2, "null"), position = "left")
+    
+ggdraw(final_plot)
+
+ggsave(final_plot, filename = '../figures/correlations_growth_climate_K_corrected.pdf', height = 14, width = 8) 
+```
+
+```{r growth parameters versus bio11}
+# bio11 correlation plots
+bio11.plt.lst <- map(phenotypes, function(pheno){
+  phenoClim %>%
+    select(accession, !!pheno, bio_11) %>%
+    left_join(select(meta, accession, group), by = 'accession') %>%
+    drop_na() %>%
+    ggplot(aes_string(x = 'bio_11', y = pheno)) +
+    geom_point(aes(color = group)) +
+    scale_color_manual(values = admx.col$color) +
+    geom_smooth(method = 'lm', se = F, color = 'grey') +
+    stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
+    theme_classic() +
+    labs(x = 'winter temp. (ºC)',
+         y = pheno.labels[pheno],
+         color = 'subpopulation') +
+    theme(legend.position = 'bottom',
+          text = element_text(size = 16),
+          axis.title.y = element_text(size = 16)) +
+    guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
+})
+
+
+bio11.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
+
+ggsave(bio11.plt, filename = '../figures/growthParametersVSbio11.pdf', width = 10.5, height = 10.5)
+```

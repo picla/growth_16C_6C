@@ -1,0 +1,161 @@
+---
+title: "005.gemma_plots"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(wesanderson)
+library(GenomicRanges)
+library(cowplot)
+options(bitmapType="cairo")
+```
+
+```{r data}
+# GEMMA gwas results
+gwas.files <- list.files(path = '../results/', pattern = '*.assoc.txt', full.names = T)
+
+# growth phenotypes
+growth <- read_csv('../../003.growth_parameters/results/phenotypes.csv')
+```
+
+```{r functions}
+# QQ-plots for GWAS -log10(p-values)
+plot.qq <- function(gwas.pval, ci = 0.95){
+  # get number of tests
+  nTests = length(gwas.pval)
+  qq.dat <- tibble(
+    observed = -log10(sort(gwas.pval)),
+    expected = -log10(ppoints(nTests)),
+    cLower = -log10(qbeta(p = (1 - ci) / 2, shape1 = seq(nTests), shape2 = rev(seq(nTests)))),
+    cUpper = -log10(qbeta(p = (1 + ci) / 2, shape1 = seq(nTests), shape2 = rev(seq(nTests)))))
+  # make QQ-plot
+  qq.plt <- ggplot(qq.dat, aes(x = expected, y = observed)) +
+    geom_ribbon(aes(ymax = cUpper, ymin = cLower), fill = "grey30", alpha = 0.5) +
+    geom_step(color = wes_palettes['Darjeeling1'][[1]][1], size = 1.1, direction = "vh") +
+    geom_segment(data = . %>% filter(expected == max(expected)),
+                 aes(x = 0, xend = expected, y = 0, yend = expected),
+                 size = 1.25, alpha = 0.5, color = "grey30", lineend = "round") +
+    labs(x = expression(paste("Expected -log"[10],"(", plain(P),")")),
+         y = expression(paste("Observed -log"[10],"(", plain(P),")"))) +
+    theme_minimal()
+  
+  return(qq.plt)
+}
+
+# get aboslute position of SNPs on the genome.
+# for plotting manhattan plots
+SNP_absolutePosition = function(chr, pos, chromEnds, gap = 1000000){
+  chromEnds.cum <- c(0, cumsum(chromEnds))
+  absPos <- pos + chromEnds.cum[chr] + (chr - 1) * gap
+  return(absPos)
+}
+
+# createa manhattan plot of GWAS results
+plot.manhattan <- function(gwas.chr, gwas.pos, gwas.pval, gwas.af, maf = 0.05){
+  # combine data in tibble
+  gwas.dat <- tibble(chr = gwas.chr, pos = gwas.pos, pval = gwas.pval, af = gwas.af)
+  # define chromosome lengths
+  chrLengths <- gwas.dat %>%
+    group_by(chr) %>%
+    summarise(maxPos = max(pos), .groups = 'drop')
+  # get absolute SNP positions for plotting
+  gwas.dat$absPos <- pmap_dbl(list(chr = gwas.dat$chr, pos = gwas.dat$pos), SNP_absolutePosition, chromEnds = chrLengths$maxPos)
+  # get chromosome center positions fror x-axis marks
+  axis.dat <- gwas.dat %>%
+    group_by(chr) %>%
+    summarise(centerPos = (max(absPos) + min(absPos))/2, .groups = 'drop')
+  # get significance threshold
+  sig.bonf <- 0.05/length(gwas.pval)
+  # plot
+  manh.plt <- gwas.dat %>%
+    filter(af >= maf) %>%
+    ggplot(aes(x = absPos, y = -log10(pval), color = as.factor(chr))) +
+      geom_point(alpha = 1, size = 0.5) +
+      geom_hline(yintercept = -log10(sig.bonf), color = wes_palettes['Darjeeling1'][[1]][1], linetype = "dashed") + 
+      scale_color_manual(values = rep(c(wes_palettes['Darjeeling1'][[1]][5], '#2a8faa'), max(gwas.dat$chr))) +
+      scale_x_continuous(label = axis.dat$chr, breaks = axis.dat$centerPos) +
+      labs(x = NULL,
+           y = '-log10(p)') +
+      theme_minimal() +
+      theme(
+        legend.position = 'none',
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+  return(manh.plt)
+}
+
+# select genes underlying interesting SNP regions
+get.genesForGWAShits <- function(gwas.file, pVal.thrs = 10^-5, LD.dist = 10000, annot.GR = araport11.genes.GR)
+{
+  # get GWAS results and prepare
+  gwas.res <- read_delim(gwas.file, delim = '\t') %>%
+    dplyr::select(chr, ps, p_lrt) %>%
+    filter(p_lrt <= pVal.thrs) %>%
+    mutate(start = ps - !!LD.dist,
+           stop = ps + !!LD.dist)
+  
+  # transform to GRanges
+  gwas.GR <- GRanges(
+    seqnames = Rle(paste0('Chr', pull(gwas.res, chr))),
+    ranges = IRanges(start = pull(gwas.res, start), end = pull(gwas.res, stop)),
+    strand = Rle(strand(rep('*', nrow(gwas.res)))))
+  
+  # get genes tagged by GWAS SNPs
+  gwas.res.araport11 <- subsetByOverlaps(araport11.GR, gwas.GR)
+  genes <- mcols(gwas.res.araport11)$gene
+  
+  return(genes)
+}
+```
+
+```{r GWAS plots for growth rate in 16ºC}
+gwas.result <- read_delim(gwas.files[grep('r_16C', gwas.files)], delim = '\t')
+pheno.lab <- expression(paste('growth rate (', italic('r'), ') 16ºC'))
+r_16C.manhattan <- plot.manhattan(gwas.result$chr, gwas.result$ps, gwas.result$p_lrt, gwas.result$af) +
+      xlab(' ') +
+      theme(text=element_text(size = 30))
+    
+r_16C.QQ <- plot.qq(gwas.result$p_lrt) +
+      theme(text=element_text(size = 30))
+
+png('../figures/r_16C_manhattan_qqplot_nlme.full.png', width = 1440, height = 480)
+print(plot_grid(plotlist = list(r_16C.manhattan, r_16C.QQ), label_size = 36, ncol = 2, rel_widths = c(3,1), align = 'hv'))
+dev.off()
+
+```
+
+```{r GWAS plots initial size, growth rate in 6C and growth temperature response}
+plt.lst <- map(c('M0', 'r_6C', 'r_response'), function(pheno.name){
+  pheno.lab <- pheno.descr %>%
+    filter(phenotype == !!pheno.name) %>%
+    pull(description)
+  if (pheno.lab ==  'growth rate (r) temp. response'){pheno.lab <- expression(paste(Delta, " growth rate (r)"))}
+  
+  gwas.result <- read_delim(paste0('/groups/nordborg/projects/cold_adaptation_16Cvs6C/002.growth/007.GWAS/003.results/002.gemma/', pheno.name,  '.assoc.txt'), delim = '\t')
+  plt.manhattan <- plot.manhattan(gwas.result$chr, gwas.result$ps, gwas.result$p_lrt, gwas.result$af) +
+    ggtitle(pheno.lab) +
+    xlab(' ') +
+    theme(text=element_text(size = 30))
+
+  
+  plt.qq <- plot.qq(gwas.result$p_lrt) +
+      ggtitle(' ') +
+      theme(text=element_text(size = 30))
+  
+  plot.lst <- list('manhattan' = plt.manhattan,
+                   'qq' = plt.qq)
+  
+})
+names(plt.lst) <- c('M0', 'r_6C', 'r_response')
+
+png('../figures/manhattan_qqplot_M0_r_6C_r_response_nlme.full.png', width = 1440, height = 960)
+print(plot_grid(plotlist = list(plt.lst$M0$manhattan, plt.lst$M0$qq,
+                                plt.lst$r_6C$manhattan, plt.lst$r_6C$qq,
+                                plt.lst$r_response$manhattan, plt.lst$r_response$qq),
+                label_size = 36, ncol = 2, rel_widths = c(3,1), align = 'hv'))
+dev.off()
+```
+

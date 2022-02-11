@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# ignore data files
+001.data/
+
+# ignore R project file
+*.Rproj
+
+# ignore results files
+**/results/*

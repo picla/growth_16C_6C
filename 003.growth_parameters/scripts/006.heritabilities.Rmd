@@ -1,0 +1,63 @@
+---
+title: "006.heritabilities"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(lme4)
+library(tidyverse)
+library(ggpubr)
+library(kableExtra)
+```
+
+```{r data}
+pheno_ID_exp <- read_csv('../results/phenotypes_ID.csv') %>%
+  mutate(accession = as.factor(accession))
+```
+
+
+```{r heritabilities}
+# initial size heritabilities
+M0.dta <- pheno_ID_exp %>%
+  separate(ID, sep = '_', into = c('tray', 'coord', 'temp', 'replicate')) %>%
+  mutate(experiment = paste(temperature, replicate, sep = '_')) %>%
+  dplyr::select(accession, experiment, M0)
+
+M0.lmm <- lmer(M0 ~ 1 + experiment + (1|accession),
+              data = M0.dta)
+  
+M0.lmm.varcor <- as_tibble(summary(M0.lmm)$varcor)
+M0.Vg <- M0.lmm.varcor$vcov[1]
+M0.Ve <- M0.lmm.varcor$vcov[2]
+M0.Vp <- M0.Vg + M0.Ve
+M0.H2 <- M0.Vg/M0.Vp
+
+# growth rate heritabilities for each temperature
+r.H2$H2 <- map_dbl(r.H2$temperature, function(temp){
+  pheno.dta <- pheno_ID_exp %>%
+    separate(ID, sep = '_', into = c('tray', 'coord', 'temp', 'replicate')) %>%
+    filter(temperature == !!temp) %>%
+    mutate(experiment = paste(temperature, replicate, sep = '_')) %>%
+    dplyr::select(accession, experiment, r)
+  # calculate heritability
+  lmm <- lmer(r ~ 1 + experiment + (1|accession),
+              data = pheno.dta)
+  
+  lmm.varcor <- as_tibble(summary(lmm)$varcor)
+  Vg <- lmm.varcor$vcov[1]
+  Ve <- lmm.varcor$vcov[2]
+  Vp <- Vg + Ve
+  H2 <- Vg/Vp
+  
+  return(H2)
+})
+
+M0.H2
+r.H2
+
+```
+
+
+

@@ -1,0 +1,82 @@
+---
+title: "009.8accessions_growth_metabolome_profile"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(ggpubr)
+```
+
+```{r data}
+# RNA-seq samples
+samples <- read_delim('../../001.data/RNAseq_samples.txt', delim = '\t') %>%
+  mutate(temperature = as.factor(temperature),
+         replicate = as.factor(replicate),
+         experiment = as.factor(paste(temperature, replicate, sep = '_')),
+         accession = as.factor(accession))
+
+# growth phenotypes
+growth <- read_csv('../../003.growth_parameters/results/phenotypes.csv') %>%
+  mutate(accession = as.factor(accession))
+
+# metabolic distances
+metabolDist <- read_csv('../../001.data/metabolic_distance.csv') %>%
+  mutate(accession = as.factor(accession)) %>%
+  select(accession, distance)
+
+# worldclim data
+worldclim <- read_csv('../../001.data/2029_modified_MN_SH_wc2.0_30s_bilinear.csv') %>%
+  mutate(accession = as.factor(accession))
+```
+
+```{r growth behaviour of 8 RNA-seq accessions}
+pheno.labels <- c('M0' = expression(paste('initial size (', italic('M0'), ')')),
+                  'r_16C' = expression(paste('growth rate (', italic('r'), ') 16ºC')),
+                  'r_6C' = expression(paste('growth rate (', italic('r'), ') 6ºC')),
+                  'r_response' = expression(paste(Delta, 'growth rate (', italic('r'), ')')))
+
+# select accessions
+accessions.rna <- unique(samples$accession)
+# correlate each growth parameter to bio_11
+growth.bio11.rnaSeqAcns.lst <- map(c('M0', 'r_16C', 'r_6C', 'r_response'), function(pheno){
+  growth %>%
+    dplyr::select(accession, !!pheno) %>%
+    left_join(., dplyr::select(worldclim, accession, bio_11), by = 'accession') %>%
+    mutate(rna.seq = ifelse(accession %in% accessions.rna, 'rna-seq', 'no rna-seq')) %>%
+    ggplot(aes_string(x = 'bio_11', y = pheno)) +
+    geom_point(aes(alpha = rna.seq)) +
+    theme_classic() +
+    labs(x = 'winter temperature (ºC)',
+         y = pheno.labels[pheno]) +
+    theme(legend.title = element_blank())
+})
+
+growth.bio11.rnaSeqAcns <- ggarrange(plotlist = growth.bio11.rnaSeqAcns.lst, common.legend = T, legend = 'bottom')
+```
+```{r metabolic behaviour of 8 RNA-seq accessions}
+# select accessions
+accessions.rna <- unique(samples$accession)
+# correlate metabolic distance to bio_11
+metabolDist.bio11.rnaSeqAcns <- metabolDist %>%
+  mutate(rna.seq = ifelse(accession %in% accessions.rna, 'rna-seq', 'no rna-seq')) %>%
+  left_join(., dplyr::select(worldclim, accession, bio_11), by = 'accession') %>%
+  ggplot(aes(x = bio_11, y = distance)) +
+  geom_point(aes(alpha = rna.seq)) +
+  theme_classic() +
+  labs(x = 'winter temperature (ºC)',
+       y = 'metabolic distance')
+```
+```{r combine plots}
+growth.metaboDist.bio11.rnaSeqAcns <- ggarrange(growth.bio11.rnaSeqAcns.lst[[1]],
+          growth.bio11.rnaSeqAcns.lst[[2]],
+          growth.bio11.rnaSeqAcns.lst[[3]],
+          metabolDist.bio11.rnaSeqAcns,
+          common.legend = T,
+          legend = 'bottom',
+          labels = 'AUTO')
+
+ggsave('../figures/rnaSeq_samples_growth_metabolicDistance.pdf', plot = growth.metaboDist.bio11.rnaSeqAcns, width = 10.5, height = 10.5)
+```

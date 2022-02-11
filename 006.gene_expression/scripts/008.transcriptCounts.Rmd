@@ -1,0 +1,85 @@
+---
+title: "008.average_normalised_expression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(tximport)
+library(DESeq2)
+library(vsn)
+```
+
+```{r data}
+# RNA-seq samples
+samples <- read_delim('../../001.data/RNAseq_samples.txt', delim = '\t') %>%
+  mutate(temperature = as.factor(temperature),
+         replicate = as.factor(replicate),
+         experiment = as.factor(paste(temperature, replicate, sep = '_')),
+         accession = as.factor(accession))
+
+# quantification data directory
+quant.dir <- '../results/006.quantification_salmon/'
+
+# araport11 annotation
+araport11 <- read.table('../../001.data/Araport11_GFF3_genes_transposons.201606.ChrM_ChrC_FullName.gtf', sep = '\t')
+```
+
+```{r process Araport11 GTF}
+# araport11 GTF
+colnames(araport11) <- c('chr', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attributes')
+araport11$attributes <- as.character(araport11$attributes)
+araport11[,9:10] <- str_split_fixed(araport11$attributes, ';', 3)[,1:2]
+araport11$V10 <- sub(".*id ", "", araport11$V10)
+```
+
+```{r expression data}
+# data
+expression.files <- file.path(quant.dir, samples$basename ,'_quantification_salmon/quant.sf', fsep = '')
+names(expression.files) <- samples$sample
+
+# transcript <-> gene
+tx2gene <- data.frame('transcriptID' = sub(".*id ", "", araport11$attributes), 'geneID' = araport11$V10)
+
+# import salmon quantification data
+samples.acn1 <- samples$sample[samples$accession %in% unique(samples$accession)[1]]
+txi <- tximport(expression.files[samples.acn1], tx2gene = tx2gene, type = 'salmon', dropInfReps = T)
+for (acn in unique(samples$accession)[-1])
+{
+  samples.acn <- samples$sample[samples$accession %in% acn]
+  txi.acn <- tximport(expression.files[samples.acn], tx2gene = tx2gene, type = 'salmon', dropInfReps = T)
+  # use overlapping genes
+  idx <- intersect(rownames(txi$counts), rownames(txi.acn$counts))
+  txi$abundance <- cbind(txi$abundance[idx, ], txi.acn$abundance[idx, ])
+  txi$counts <- cbind(txi$counts[idx, ], txi.acn$counts[idx, ])
+  txi$length <- cbind(txi$length[idx, ], txi.acn$length[idx, ])
+}
+
+# match Colnames with samples order
+txi$abundance <- txi$abundance[ ,samples$sample]
+txi$counts <- txi$counts[ ,samples$sample]
+txi$length <- txi$length[ ,samples$sample]
+```
+
+```{r create DESeq DataSet}
+dds.full <- DESeqDataSetFromTximport(txi, colData = samples, design = ~  replicate + accession + temperature + replicate:temperature + accession:temperature)
+idx <- rowSums(counts(dds.full) >= 10 ) >= nrow(samples) * 0.1
+dds.full <- dds.full[idx,]
+```
+
+```{r variance stabilising transformation}
+dds.varStab <- varianceStabilizingTransformation(dds.full, blind=F)
+meanSdPlot(assay(dds.varStab))
+```
+
+```{r save variance stabilised counts}
+as_tibble(t(assay(dds.varStab)), rownames = 'sample') %>%
+  left_join(dplyr::select(samples, sample, accession, temperature, replicate), by = 'sample') %>%
+  dplyr::select(accession, temperature, replicate, sample, everything()) %>%
+  write_csv('../results/transcriptCounts_varianceStabilised.csv')
+```
+
+
+

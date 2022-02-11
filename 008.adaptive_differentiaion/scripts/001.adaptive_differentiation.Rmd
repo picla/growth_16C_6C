@@ -1,0 +1,213 @@
+---
+title: "001.adaptive_differentiation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(quaint)
+library(rhdf5)
+library(viridis)
+library(kableExtra)
+library(ggpubr)
+options(bitmapType="cairo")
+```
+
+# script based on https://github.com/emjosephs/quaint
+
+```{r data}
+# growth phenotypes
+growth <- read_csv('../../003.growth_parameters/results/phenotypes.csv') %>%
+  mutate(accession = as.factor(accession))
+
+# SNP matrix
+G.h5 <- '../../001.data/all_chromosomes_binary_gzip.hdf5'
+
+# meta info for all accessions
+meta <- read_csv('../../001.data/1001genomes-accessions.csv') %>%
+  mutate(ecotype_id = as.factor(ecotype_id)) %>% rename(accession = ecotype_id)
+
+# worldclim data
+worldclim <- read_csv('../../001.data/2029_modified_MN_SH_wc2.0_30s_bilinear.csv') %>%
+  mutate(accession = as.factor(accession))
+
+# https://colorbrewer2.org/?type=qualitative&scheme=Paired&n=10
+colorbrwr <- c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a")
+
+# phenotypes
+phenotypes <- colnames(growth)[2:5]
+```
+
+```{r phenotype labels}
+# create phenotype labels
+pheno.labels <- c('M0' = expression(paste('initial size (', italic('M0'), ')')),
+                  'r_16C' = expression(paste('growth rate (', italic('r'), ') 16ºC')),
+                  'r_6C' = expression(paste('growth rate (', italic('r'), ') 6ºC')),
+                  'r_response' = expression(paste('growth rate (', italic('r'), ') temp. response')))
+```
+
+
+```{r genotypes}
+G.acns <- h5read(G.h5, name = 'accessions')
+G.acn.idx <- match(growth$accession, G.acns)
+
+# read in SNPs of phenotyped accessions
+SNPs <- h5read(G.h5, 'snps', index = list(G.acn.idx, NULL))
+
+# filter SNPs with maf == 0
+maf.thrs <- 0.0
+mac.thrs <- maf.thrs * nrow(SNPs)
+SNPcnt <- colSums(SNPs)
+SNPmac <- unlist(lapply(SNPcnt, function(cnt){
+  min(c(cnt, nrow(SNPs) - cnt))}))
+
+SNPs <- SNPs[ ,which(SNPmac > mac.thrs)]
+```
+
+```{r build kinship matrix}
+# make kinship matrix
+K <- make_k(as.matrix(SNPs))
+```
+
+```{r eigen decomposition of kinship matrix}
+# eigen decomposition of kinship
+K.eigen <- eigen(K)
+
+# calculate percentages
+percs <- K.eigen$values^2/sum(K.eigen$values^2) * 100
+
+# prepare as label axes
+K.eigen.percs.lab <- paste('PC', c(1:length(K.eigen$values)), " (", paste(round(percs, 2), '%', sep = ''), ")", sep = '')
+
+# plot percentages
+plot(K.eigen$values/sum(K.eigen$values)*100, col = "#43B629", bty="n", ylab = "% variation explained by each PC", xlab = "PC")
+
+for (pc.nr in seq(1, 20, by = 2))
+{
+  PC.x <- paste('PC', pc.nr, sep = '')
+  PC.y <- paste('PC', pc.nr+1, sep = '')
+  colnames(K.eigen[['vectors']]) <- paste('PC', c(1:ncol(K.eigen[['vectors']])), sep = '')
+  PCA.plt <- as_tibble(K.eigen[['vectors']], .name_repair = "check_unique") %>%
+    dplyr::select(!!PC.x, !!PC.y) %>%
+    mutate(accession = G.acns[G.acn.idx][c(1:dim(K)[1])]) %>%
+    left_join(., dplyr::select(meta, accession, group), by = 'accession') %>%
+    ggplot(aes_string(x = PC.x, y = PC.y, color = 'group')) +
+      geom_point() +
+      xlab(K.eigen.percs.lab[pc.nr]) +
+      ylab(K.eigen.percs.lab[pc.nr + 1]) +
+      theme_minimal()
+  
+  print(PCA.plt)
+}
+```
+
+```{r Qpc all phenotypes}
+Qpc.allPheno <- lapply(phenotypes, function(pheno.name)
+{
+  # calculate Qpc and test for selection
+  Qpc.pheno <- calcQpc(myZ = pull(growth, !!pheno.name),
+                myU = K.eigen$vectors, 
+                myLambdas = K.eigen$values,
+                myM = 1:10,
+                myL = 11:248)
+  return(Qpc.pheno)
+})
+names(Qpc.allPheno) <- phenotypes
+```
+
+```{r plot significance all Qpc analyses}
+lapply(phenotypes, function(pheno.name)
+{
+  Qpc.pheno <- Qpc.allPheno[[pheno.name]]
+  # plot significance for each PC
+  Qpc.pheno$pvals %>%
+    as_tibble() %>%
+    rename(pvalue = value) %>%
+    mutate(PC = as.factor(c(1:length(pvalue)))) %>%
+    ggplot(aes(x = PC, y = -log10(pvalue))) +
+      geom_point() +
+      geom_hline(yintercept = c(-log10(0.05), -log10(0.1)), color = 'red', linetype = c(1,2)) +
+      labs(title = pheno.name) +
+      theme_minimal()
+})
+```
+
+```{r plot list PC-phenotype correlations for significant Qpc}
+quaint.plt.lst <- map(phenotypes, function(pheno.name)
+{
+  Qpc.pheno <- Qpc.allPheno[[pheno.name]]
+  # plot PC - phenotype correlation for each significant PC
+  PC.sign <- which(Qpc.pheno$pvals < 0.1)
+  if (length(PC.sign) == 0){return(NA); next()}
+  pheno.plt.lst <- map(PC.sign, function(PC.nr){
+    Va.est <- var0(Qpc.pheno$cml)
+    CI.est <- sqrt(Va.est * K.eigen$values)
+    
+    PC.pheno.plt.tbl  <- growth %>%
+      slice_head(n = dim(K)[1]) %>%
+      select(accession, !!pheno.name) %>%
+      rename(pheno = !!pheno.name) %>%
+      mutate(PC = K.eigen$vectors[, PC.nr],
+             ymin = mean(pheno) - (1.645 * PC * CI.est[PC.nr]),
+             ymax = mean(pheno) + (1.645 * PC * CI.est[PC.nr])) %>%
+      left_join(., select(meta, accession, group), by = 'accession') %>%
+      left_join(., select(worldclim, accession, bio_11), by = 'accession')
+
+    PC.pheno.plt.admx <- ggplot(PC.pheno.plt.tbl, aes(x = PC, y = pheno)) +
+      geom_smooth(method = 'lm', se = F) +
+      geom_ribbon(aes(ymin=ymin, ymax=ymax, x=PC, fill = 'neutral'), fill = 'grey', alpha = 0.3) +
+      geom_point(aes(color = group)) +
+      scale_color_manual(values = colorbrwr) +
+      labs(x = paste0('PC', PC.nr), y = pheno.labels[pheno.name]) +
+      theme_classic()
+    print(PC.pheno.plt.admx)
+    return(PC.pheno.plt.admx)
+  })
+  
+  names(pheno.plt.lst) <- paste0('PC', PC.sign)
+  return(pheno.plt.lst)
+})
+names(quaint.plt.lst) <- phenotypes
+```
+
+```{r output all Qpc p-values}
+Qpc.pvals.lst <- imap(Qpc.allPheno, function(Qpc, pheno){
+  pvals <- Qpc$pvals
+  padj <- p.adjust(pvals, method = 'fdr')
+  return(
+    tibble(
+      phenotype = pheno,
+      PC = paste0('PC', c(1:length(pvals))),
+      pval = pvals,
+      padj = padj
+    )
+  )
+})
+
+Qpc.pvals <- do.call(rbind, Qpc.pvals.lst)
+
+write_csv(Qpc.pvals, file = '../results/quaint_pvalues_nlme.full.csv')
+```
+
+
+```{r plot M0 vs PC6, r_16C vs PC5 r_response vs PC5 in combined figure, message = F}
+M0_PC6.plt <- quaint.plt.lst$M0$PC6 +
+  theme(text = element_text(size = 16),
+        legend.title = element_blank())
+
+r_16C_PC5.plt <- quaint.plt.lst$r_16C$PC5 +
+  theme(text = element_text(size = 16),
+        legend.title = element_blank())
+
+r_response_PC5.plt <- quaint.plt.lst$r_response$PC5 +
+  theme(text = element_text(size = 16),
+        legend.title = element_blank())
+
+combo.plt <- ggarrange(M0_PC6.plt, r_16C_PC5.plt, r_response_PC5.plt, common.legend = T, legend = 'bottom', ncol = 3)
+
+
+ggsave(filename = '../figures/quaint_M0_16C_PC6_r_16C_PC1_PC5_nlme.full.pdf',
+       plot = combo.plt,
+       width = 14, height = 4.7)
+```

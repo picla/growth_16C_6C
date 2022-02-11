@@ -1,0 +1,192 @@
+---
+title: "010.cold_acclimation_gene_expression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(ggdendro)
+library(viridis)
+library(cowplot)
+library(wesanderson)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r data}
+# RNA-seq samples
+samples <- read_delim('../../001.data/RNAseq_samples.txt', delim = '\t') %>%
+  mutate(temperature = as.factor(temperature),
+         replicate = as.factor(replicate),
+         experiment = as.factor(paste(temperature, replicate, sep = '_')),
+         accession = as.factor(accession))
+
+# variance stabilised transcript counts
+counts.varStab <- read_csv('../results/transcriptCounts_varianceStabilised.csv')
+
+# worldclim data
+worldclim <- read_csv('../../001.data/2029_modified_MN_SH_wc2.0_30s_bilinear.csv') %>%
+  mutate(accession = as.factor(accession))
+
+## cold acclimation genes
+# CBF regulon according Park et al., 2015
+CBF_UP.Park <- read_delim('../../001.data/CBF_regulon_UP_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
+CBF_DOWN.Park <- read_delim('/groups/nordborg/projects/cold_adaptation_16Cvs6C/003.transcriptome/001.8accessions/004.cold_acclimation_gene_expression/001.data/CBF_regulon_UP_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
+
+# HSFC1 regulon according Park et al., 2015
+HSFC1 <- read_delim('../../001.data/HSFC1_regulon_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
+
+# ZAT12 regulon according Vogel et al., 2005
+ZAT12_UP <- read_csv('../../001.data/ZAT12_upregulated_table9.csv') %>%
+  filter(coldResponsive == 'x') %>%
+  mutate(AGI = toupper(AGI))
+ZAT12_DOWN <- read_csv('../../001.data/ZAT12_downregulated_table10.csv') %>%
+  filter(coldResponsive == 'x')%>%
+  mutate(AGI = toupper(AGI))
+
+# CBF and CAMTA transcription factors
+CBF.TF <- c('AT4G25490', 'AT4G25470', 'AT4G25480', 'AT5G51990')
+CAMTA.TF <- c('AT5G09410', 'AT5G64220', 'AT2G22300')
+
+# araport11 annotation
+araport11 <- read.table('../../001.data/Araport11_GFF3_genes_transposons.201606.ChrM_ChrC_FullName.gtf', sep = '\t')
+```
+
+```{r gather cold acclimation genes}
+cold_acclimation_genes <- unique(c(CBF_UP.Park$gene, CBF_DOWN.Park$gene, CBF.TF, CAMTA.TF, ZAT12_DOWN$AGI, ZAT12_UP$AGI, HSFC1$gene))
+```
+```{r process Araport11 GTF}
+# araport11 GTF
+colnames(araport11) <- c('chr', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attributes')
+araport11$attributes <- as.character(araport11$attributes)
+araport11[,9:10] <- str_split_fixed(araport11$attributes, ';', 3)[,1:2]
+araport11$V10 <- sub(".*id ", "", araport11$V10)
+```
+
+```{r filter samples}
+# filter only sequenced samples
+samples <- filter(samples, Selected == 'yes') %>%
+  mutate(accession = as.factor(accession),
+    temperature = as.factor(temperature),
+         replicate = as.factor(replicate),
+         experiment = as.factor(paste(temperature, replicate, sep = '_')),
+         sampleName = paste(accession, temperature, replicate, sep = '_')) %>%
+    left_join(., worldclim[, c('accession', 'bio_11')], by = 'accession')
+```
+
+
+```{r heatmap cold acclimation genes}
+library(pheatmap)
+
+# prepare data
+counts.varstab.CBF <- counts.varStab %>%
+  pivot_longer(contains('AT', ignore.case = F), names_to = 'gene', values_to = 'expression') %>%
+  mutate(accession = as.factor(accession)) %>%
+  filter(gene %in% cold_acclimation_genes) %>%
+  dplyr::select(gene, sample, accession, temperature, expression) %>%
+  group_by(accession, temperature, gene) %>%
+  summarise(mean(expression), .groups = 'drop') %>%
+  mutate(acnTemp = paste(accession, temperature, sep = '_'), expression = `mean(expression)`) %>%
+  dplyr::select(-`mean(expression)`) %>%
+  group_by(gene) %>%
+  mutate(expression = scale(expression))
+  
+# Convert to a matrix for clustering
+counts.varstab.CBF.wide <- counts.varstab.CBF %>%
+  dplyr::select(gene, acnTemp, expression) %>%
+  pivot_wider(id_cols = gene, names_from = acnTemp, values_from = expression)
+
+counts.varstab.CBF.mtrx <- as.matrix(counts.varstab.CBF.wide[, -1])
+rownames(counts.varstab.CBF.mtrx) <- counts.varstab.CBF.wide$gene
+
+# clustering
+counts.varstab.CBF.htmp <- pheatmap(counts.varstab.CBF.mtrx,
+         color = viridis(1000),
+         clustering_method = 'ward.D2')
+# cluster annotation
+cluster.annotation <- as_tibble(data.frame(cutree(counts.varstab.CBF.htmp$tree_row, k = 7))[counts.varstab.CBF.htmp$tree_row$order, ], rownames = 'gene') %>%
+  rename(cluster = value) %>%
+  mutate(cluster.chr = as.character(cluster),
+         cluster.fctr = factor(cluster.chr, levels = unique(cluster.chr), ordered = T),
+         cluster.ord = as.numeric(cluster.fctr),
+         cluster.ltr = LETTERS[cluster.ord],
+         gene = names(cutree(counts.varstab.CBF.htmp$tree_row, k = 7))[counts.varstab.CBF.htmp$tree_row$order]) %>%
+  select(gene, cluster = cluster.ltr) %>%
+  column_to_rownames(var = 'gene')
+
+# climate annotation
+bio11.annotation <- tibble(acnTemp = counts.varstab.CBF.htmp$tree_col$labels[counts.varstab.CBF.htmp$tree_col$order]) %>%
+  separate(acnTemp, c('accession', NA), remove = F) %>%
+  left_join(., dplyr::select(worldclim, accession, bio_11), by = 'accession') %>%
+  dplyr::select(-accession) %>%
+  rename('winter temp. (ºC)' = bio_11) %>%
+  column_to_rownames(var = 'acnTemp')
+
+# build heatmap
+col.func <- colorRampPalette(c(wes_palette("Darjeeling2")[2], wes_palette("Darjeeling2")[4]))
+htmp <- pheatmap(counts.varstab.CBF.mtrx,
+         color = viridis(1000),
+         border_color = NA,
+         clustering_method = 'ward.D2',
+         annotation_row = cluster.annotation,
+         annotation_col = bio11.annotation,
+         show_rownames = F,
+         annotation_names_col = F,
+         annotation_colors = list('winter temp. (ºC)' = col.func(10)))
+
+pdf('../figures/heatmap_cold_acclimation.pheatmap.pdf')
+htmp
+dev.off()
+```
+
+```{r write clusters}
+write_csv(as_tibble(cluster.annotation, rownames = 'gene'), '../results/cold_acclimation_expression_clusters.csv')
+```
+
+```{r cluster specific expression correlations with environment}
+clusters.bio11.plt.lst <- map(unique(cluster.annotation$cluster), function(clstr){
+  cluster.genes <- as_tibble(cluster.annotation, rownames = 'gene') %>%
+    filter(cluster == clstr) %>%
+    pull(gene)
+  
+  cluster.expression <- counts.varStab %>%
+    mutate(accession = as.factor(accession)) %>%
+    pivot_longer(cols = matches('AT.G.{5}'), names_to = 'gene', values_to = 'expression') %>%
+    filter(gene %in% cluster.genes) %>%
+    group_by(gene) %>%
+    mutate(expression.scaled = as.numeric(scale(expression))) %>%
+    ungroup() %>%
+    left_join(., dplyr::select(worldclim, accession, bio_11), by = 'accession')
+  
+  clstr.bio11.plt <- cluster.expression %>%
+    ggplot(aes(x = bio_11, y = expression.scaled, color = temperature)) +
+    geom_point() +
+    geom_line(aes(group = interaction(gene, temperature, replicate)), size = 0.1, alpha = 0.5) +
+    geom_smooth(method = 'lm', se = F) +
+    stat_cor(method = 'pearson') +
+    labs(x = 'winter temperature (ºC)',
+         y = 'gene-wide standardized expression',
+         title = paste('cluster', clstr)) +
+    theme_classic() +
+    theme(text = element_text(size = 14))
+  
+  print(clstr.bio11.plt)
+  return(clstr.bio11.plt)
+})
+
+# combine plots
+clstr.bio11.combo.manuscript <- ggarrange(plotlist = clusters.bio11.plt.lst,
+                               ncol = 2,
+                               nrow = 4,
+                               common.legend = T,
+                               legend = 'bottom')
+
+ggsave(filename = '../figures/cold_acclimation_bio11_clusters_combo_manuscript.pdf',
+      plot = clstr.bio11.combo.manuscript,
+      width = 21,
+      height = 21)
+```
+
+

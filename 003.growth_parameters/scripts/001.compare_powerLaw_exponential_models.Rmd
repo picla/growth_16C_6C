@@ -1,0 +1,87 @@
+---
+title: "001.powerLaw_exponential_model_comparison"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(nlme)
+```
+
+```{r data}
+# read in phenotyping data
+lemna <- read_csv('../../002.prepare_growthData/results/rawdata_combined_annotation_processed.csv') %>%
+  mutate(accession = as.factor(accession))
+```
+
+```{r self-start function - power law}
+## SELF START POWER LAW ##
+## self start function from Paine et al., 2012. Methods Ecol. Evol.
+fmla.pow <- as.formula("~(M0^(1-beta) + r*x*(1-beta))^(1/(1-beta))")
+Init.pow <- function(mCall, LHS, data){
+  xy <- sortedXyData(mCall[["x"]], LHS, data)
+  if(nrow(xy) < 4) {stop("Too few distinct x values to fit a power-law")}
+  M0   <- min(xy$y)		              # Use the minimum y value as an initial guess for M0
+  r    <- coef(lm(log(y) ~ x, xy))[2]    # Use the slope from a log fit to the data as an initial guess for r
+  beta <- 0.9	                          # give initial guess of beta as 0.9. don't use beta = 1, as it's undefined (1/0)
+  value <- c(M0, r, beta) 
+  names(value) <- mCall[c("M0", "r", "beta")]
+  return(value)
+}
+SS.pow  <- selfStart(fmla.pow, initial = Init.pow, parameters = c("M0", "r", "beta"))
+```
+
+```{r self-start function - exponential}
+## SELF START EXPONENTIAL ##
+## self start function from Paine et al., 2012. Methods Ecol. Evol.
+Init.exp <- function(mCall,LHS,data) {
+ 	xy    <- sortedXyData(mCall[["X"]],LHS,data)
+	r     <- (coef(lm(log(y) ~ x, xy))[2]) # Use the slope from a linear fit to the data as an initial guess for r
+	M0    <- min(xy$y)		             # Use the minimum y value as an initial guess for A
+ 	value <- c(M0, r)
+ 	names(value) <- mCall[c("M0", "r")]
+ 	return(value)
+	}
+fmla.exp <- as.formula("~M0*exp(r*X)")
+SS.exp   <- selfStart(fmla.exp, initial = Init.exp, parameters = c("M0", "r"))
+```
+
+
+```{r fit power law}
+fit.lis.pow <- nlsList(Area.10000px ~ SS.pow(DAS_decimal, M0, r, beta) | ID,
+                   data = lemna,
+                   control = nls.control(maxiter = 1000,
+                                         warnOnly = T))
+
+# create nlme
+fit.pow.1 <- nlme(fit.lis.pow,
+                   control = nlmeControl(msMaxIter = 1000,
+                                         maxIter = 1000,
+                                         opt = 'nlminb',
+                                         pnlsTol = 1,
+                                         msVerbose = T),
+                   data = lemna,
+                   verbose = T)
+```
+```{r fit exponential}
+fit.lis.exp <- nlsList(Area.10000px ~ SS.exp(DAS_decimal, M0, r) | ID,
+                   data = lemna,
+                   control = nls.control(maxiter = 1000,
+                                         warnOnly = T))
+
+# create nlme
+fit.exp.1 <- nlme(fit.lis.exp,
+                   control = nlmeControl(msMaxIter = 1000,
+                                         maxIter = 1000,
+                                         opt = 'nlminb',
+                                         pnlsTol = 1,
+                                         msVerbose = T),
+                   data = lemna,
+                   verbose = T)
+```
+```{r comparison}
+anova(fit.exp.1, fit.pow.1)
+```
+

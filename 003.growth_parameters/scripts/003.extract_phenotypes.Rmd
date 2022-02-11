@@ -1,0 +1,109 @@
+---
+title: "003.extract_phenotypes"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(nlme)
+library(wesanderson)
+```
+
+
+```{r data}
+# read in phenotyping data
+lemna <- read_csv('../../002.prepare_growthData/results/rawdata_combined_annotation_processed.csv') %>%
+  mutate(accession = as.factor(accession))
+# load the power-law mixed model
+fit.nlme <- get(load('../results/full_mixedmodel.rda'))
+```
+
+```{r response curve function}
+resp.curve <- function(pheno_6C, pheno_16C)
+{
+  pheno <- tibble('X_6C' = pheno_6C, 'X_16C' = pheno_16C) %>%
+    pivot_longer(cols = starts_with('X'), names_to = 'temperature', names_prefix = 'X_', values_to = 'pheno') %>%
+    mutate(temperature = factor(temperature, levels = c('6C', '16C'), ordered = T))
+  fit <- lm(pheno ~ temperature, data = pheno)
+  resp <- as.numeric(fit$coefficients[2])
+  return(resp)
+}
+```
+
+```{r phenotypes per accession}
+fit.nlme.fe <- fixef(fit.nlme)
+
+pheno_accession <- map(unique(lemna$accession), function(acn){
+  # M0  
+  M0 <- ifelse(acn == levels(lemna$accession)[1],
+               fit.nlme.fe[['M0.(Intercept)']],
+               fit.nlme.fe[['M0.(Intercept)']] + fit.nlme.fe[[paste0('M0.accession', acn)]])
+  
+  # r_16C
+  r_16C <- ifelse(acn == levels(lemna$accession)[1],
+                  fit.nlme.fe[['r.(Intercept)']],
+                  fit.nlme.fe[['r.(Intercept)']] + fit.nlme.fe[[paste0('r.accession', acn)]])
+  
+  # r_6C
+  r_6C <- ifelse(acn == levels(lemna$accession)[1],
+                 fit.nlme.fe[['r.(Intercept)']] + fit.nlme.fe[['r.temperature6C']],
+                 fit.nlme.fe[['r.(Intercept)']] + fit.nlme.fe[['r.temperature6C']] + fit.nlme.fe[[paste0('r.accession', acn)]] + fit.nlme.fe[[paste0('r.accession', acn, ':temperature6C')]])
+  
+  # beta
+  beta <- fit.nlme.fe[['beta']]
+  
+  tbl <- tibble('accession' = acn,
+                'M0' = M0,
+                'r_16C' = r_16C,
+                'r_6C' = r_6C,
+                'beta' = beta)
+  
+  return(tbl)
+}) %>%
+  bind_rows()
+```
+
+```{r model fits - per accession}
+pheno_accession.fit <- expand_grid(accession = unique(lemna$accession), temperature = unique(lemna$temperature), DAS = c(0:22))
+
+pheno_accession.fit$Area.10000px <- pmap_dbl(pheno_accession.fit, function(accession, temperature, DAS){
+  M0 <- filter(pheno_accession, accession == !!accession) %>%
+    pull(M0)
+  r <- filter(pheno_accession, accession == !!accession) %>%
+    pivot_longer(cols = contains('r_'), names_to = 'temperature', values_to = 'r', names_prefix = 'r_') %>%
+    filter(temperature == !!temperature) %>%
+    pull(r)
+  
+  b <- filter(pheno_accession, accession == !!accession) %>%
+    pull(beta)
+  
+  Area.10000px <- (M0^(1-b) + r*DAS*(1-b))^(1/(1-b))
+  return(Area.10000px)
+})
+```
+
+
+```{r plot model fits - per accession}
+map(unique(lemna$accession), function(acn){
+  lemna %>%
+    filter(accession == !!acn) %>%
+    ggplot() +
+    geom_point(aes(x = DAS_decimal, y = log(Area.10000px), col = temperature, shape = replicate)) +
+    geom_line(data = pheno_accession.fit %>%
+                filter(accession == !!acn),
+              aes(x = DAS, y = log(Area.10000px), col = temperature)) +
+    scale_color_manual(values = wes_palette('Darjeeling1'), labels = c('16ºC', '6ºC')) +
+    theme_classic()
+})
+```
+
+```{r growth rate response}
+pheno_accession <- pheno_accession %>%
+  mutate(r_response = unlist(map2(.x = r_6C, .y = r_16C, ~ resp.curve(.x, .y)))) %>%
+  dplyr::select(accession, M0, r_16C, r_6C, r_response, beta)
+```
+
+```{r save phenotypes}
+write_csv(pheno_accession, file = '../results/phenotypes.csv')
+```

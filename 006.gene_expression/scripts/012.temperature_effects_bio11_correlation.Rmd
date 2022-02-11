@@ -1,0 +1,106 @@
+---
+title: "012.cold_acclimation_vs_random_genes"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(ggpubr)
+```
+
+```{r data}
+# differential expression between 16ºC and 6ºC, tested for each accession
+diff.expr.acn <- read_csv('../results/differentialExpression_16Vs6C_perAccession.csv') %>%
+  mutate(accession = as.factor(accession))
+
+# significant G, E, GxE effect on expression variation
+diff.expr.G_E_GxE <- read_csv('../results/differentialExpression.G.E.GxE.csv')
+
+# CBF regulon according Park et al., 2015
+CBF_UP.Park <- read_delim('../../001.data/CBF_regulon_UP_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
+CBF_DOWN.Park <- read_delim('../../001.data/CBF_regulon_DOWN_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
+
+# HSFC1 regulon according Park et al., 2015
+HSFC1 <- read_delim('../../001.data/HSFC1_regulon_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
+
+# ZAT12 regulon according Vogel et al., 2005
+ZAT12_UP <- read_csv('../../001.data/ZAT12_upregulated_table9.csv') %>%
+  filter(coldResponsive == 'x') %>%
+  mutate(AGI = toupper(AGI))
+ZAT12_DOWN <- read_csv('../../001.data/ZAT12_downregulated_table10.csv') %>%
+  filter(coldResponsive == 'x')%>%
+  mutate(AGI = toupper(AGI))
+
+# CBF and CAMTA transcription factors
+CBF.TF <- c('AT4G25490', 'AT4G25470', 'AT4G25480', 'AT5G51990')
+CAMTA.TF <- c('AT5G09410', 'AT5G64220', 'AT2G22300')
+
+# worldclim data
+worldclim <- read_csv('../../001.data/2029_modified_MN_SH_wc2.0_30s_bilinear.csv') %>%
+  mutate(accession = as.factor(accession))
+
+# variance stabilised transcript counts
+counts.varStab <- read_csv('../results/transcriptCounts_varianceStabilised.csv')
+```
+
+```{r gather cold acclimation genes}
+cold_acclimation_genes <- unique(c(CBF_UP.Park$gene, CBF_DOWN.Park$gene, CBF.TF, CAMTA.TF, ZAT12_DOWN$AGI, ZAT12_UP$AGI, HSFC1$gene))
+```
+
+```{r enrichment of differential expression - temperature}
+DE.accl <- diff.expr.acn %>%
+  filter(gene %in% cold_acclimation_genes,
+         padj < 0.05) %>%
+  pull(gene) %>%
+  unique() %>%
+  length()
+
+total.accl <- length(intersect(cold_acclimation_genes, diff.expr.acn$gene))
+nonDE.accl <- total.accl - DE.accl
+  
+DE.nonAccl <- diff.expr.acn %>%
+  filter(!(gene %in% cold_acclimation_genes),
+         padj < 0.05) %>%
+  pull(gene) %>%
+  unique() %>%
+  length()
+
+total.genes <- length(unique(diff.expr.acn$gene))
+nonDE.nonAccl <- total.genes - total.accl - DE.nonAccl
+
+cont.table <- matrix(c(DE.accl,DE.nonAccl, nonDE.accl, nonDE.nonAccl), nrow = 2, ncol = 2, byrow = T)
+
+chisq.DE <- chisq.test(cont.table)
+chisq.DE$p.value
+```
+
+```{r compare bio11 correlation distribution between cold acclimation up and down regulated genes}
+cor.boxplt <- cold_acclimation_genes.climCor %>%
+  filter(temperature != 'overall') %>%
+  #mutate(direction = factor(direction, levels = c('up', 'down'), ordered = T)) %>%
+  ggplot(aes(x = temperature, y = cor, col = direction)) +
+  geom_boxplot() +
+  stat_compare_means(method = "t.test", aes(label = paste0("p = ", ..p.format..))) +
+  labs(x = element_blank(), y = 'correlation coefficient', col = 'expression\ndirection') +
+  scale_x_discrete(labels = c('16C' = '16ºC', '6C' = '6ºC')) +
+  theme_minimal() +
+  theme(text = element_text(size = 16))
+
+cor.boxplt
+
+ggsave(cor.boxplt, filename = '../figures/bio11_correlation_distribution.pdf')
+
+```
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,97 @@
+---
+title: "006.gemma_geneSelection"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(GenomicRanges)
+library(biomaRt)
+options(bitmapType="cairo")
+```
+
+```{r data}
+# GEMMA gwas results
+gwas.files <- list.files(path = '../results', pattern = '*.assoc.txt', full.names = T)[c(1,3:5)]
+
+# araport11 annotation
+araport11 <- read_tsv('../../001.data/Araport11_GFF3_genes_transposons.201606.gff', col_names = c("chr", "source", "type", "start", "stop", "score", "strand", "phase", "attr"), na = ".", comment   = "#", col_types = "ccciidcic")
+
+# growth phenotypes
+growth <- read_csv('../../003.growth_parameters/results/phenotypes.csv')
+
+pVal.thrs <- 5
+
+# how many bp up and downstream needs to be taken into account
+LD.range <- 10000
+
+# load arabidopsis thaliana ensembl data
+athal.ensembl <- useEnsembl(biomart = 'plants_mart', host = 'plants.ensembl.org', dataset = 'athaliana_eg_gene')
+```
+
+```{r araport11 into genomic ranges}
+araport11.ID <- araport11 %>%
+  filter(type == 'gene') %>%
+  separate(attr, sep = ';', into = 'ID') %>%
+  separate(ID, sep = '=', into = c('tag', 'ID'))
+
+# check if all IDs start with 'ID'
+all(araport11.ID$tag == 'ID')
+
+# genomicRanges
+araport11.GR <- GRanges(
+  seqnames = Rle(araport11.ID$chr),
+  ranges = IRanges(start = araport11.ID$start,
+                   end = araport11.ID$stop),
+  gene = araport11.ID$ID)
+```
+
+```{r select genes}
+gwas.genes <- map(gwas.files, function(gwas.file){
+  phenotype <- str_replace(basename(gwas.file), '.assoc.txt', '')
+  # read data
+  gwas.result <- read_delim(gwas.file, delim = '\t') %>%
+    filter(p_lrt < 10^(-pVal.thrs)) %>%
+    mutate(chr = paste0('Chr', chr),
+           region_start = ps - LD.range,
+          region_start = ifelse(region_start < 0, 0, region_start),
+           region_end = ps + LD.range)
+  
+  # create Genomic Ranges
+  gwas.result.GR <- GRanges(
+    seqnames = Rle(gwas.result$chr),
+    ranges = IRanges(start = gwas.result$region_start,
+                     end = gwas.result$region_end),
+    sign = -log10(gwas.result$p_lrt),
+    SNP = gwas.result$rs)
+  
+  # overlap with gene annotation
+  gwas.genes.pheno <- findOverlaps(gwas.result.GR, araport11.GR,
+                             type = 'any',
+                             select = 'all',
+                             ignore.strand = T) %>%
+    as_tibble()
+
+  gwas.genes.pheno$phenotype <- phenotype
+  gwas.genes.pheno$SNP <- gwas.result.GR$SNP[gwas.genes.pheno$queryHits]
+  gwas.genes.pheno$sign <- gwas.result.GR$sign[gwas.genes.pheno$queryHits]
+  gwas.genes.pheno$gene <- araport11.GR$gene[gwas.genes.pheno$subjectHits]
+  
+  # gene descriptions
+  genedesc <- getBM(attributes=c('ensembl_gene_id', 'external_gene_name','description'), filters = 'ensembl_gene_id', values = gwas.genes.pheno$gene, mart = athal.ensembl)
+
+  gwas.genes.pheno <- left_join(gwas.genes.pheno, genedesc, by = c('gene' = 'ensembl_gene_id'))
+}) %>%
+  bind_rows() %>%
+  dplyr::select(phenotype, SNP, sign, gene, external_gene_name, description)
+```
+
+```{r highest significance for each phenotype}
+gwas.genes %>%
+  group_by(phenotype) %>%
+  summarise(sign = max(sign))
+```
+
+

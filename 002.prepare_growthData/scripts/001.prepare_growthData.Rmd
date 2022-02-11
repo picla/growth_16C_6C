@@ -1,0 +1,57 @@
+---
+title: "001.prepare_growthData"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r data}
+# read in phenotyping data (from Lemnatech software)
+lemna <- read_delim('../../001.data/rawdata_combined_annotation.txt', delim = '\t') %>%
+  mutate(accession = as.factor(acn)) %>%
+  dplyr::select(-acn)
+
+# read in predefined outlier datapoints (mainly negative growth data)
+# outliers have been manually selected based on visual inspection of time series data.
+# outliers were mainly individuals that showed decreasing sizes at multiple timepoints or that showed no or extremely slow growth throughout the experiment.
+# based on the number of deviating timepoints, only the affected timepoints or all timepoints were removed for that individual plant.
+outliers <- read_csv('../../001.data/outliers.csv') %>%
+  mutate(ID_DAS = paste(tray, coordinate, temperature, replicate, DAS, sep = '_'))
+```
+
+```{r preparation}
+lemna$ID <- paste(lemna$pot, lemna$experiment, sep = '_')
+lemna$Area[lemna$Area == 0] <- NA
+
+# only use accessions which have data for all replicates
+acns_rep1 <- unique(lemna$accession[lemna$replicate == 'rep1'])
+acns_rep2 <- unique(lemna$accession[lemna$replicate == 'rep2'])
+acns_rep3 <- unique(lemna$accession[lemna$replicate == 'rep3'])
+acns_rep123 <- intersect(intersect(acns_rep2, acns_rep3), acns_rep1)
+
+# prepare phenotyping dataset
+lemna <- lemna %>%
+  drop_na(Area) %>%
+  filter(accession %in% acns_rep123) %>%
+  mutate(
+    accession = factor(accession),
+    experiment = as.factor(experiment),
+    temperature = as.factor(temperature),
+    replicate = as.factor(replicate),
+    DAS_decimal = DAS_decimal - 14,
+    DAS = floor(DAS_decimal),
+    ID = as.factor(ID),
+    ID_DAS = paste(ID, DAS, sep = '_')) %>%
+  filter(!ID_DAS %in% outliers$ID_DAS) %>%
+  mutate(Area.10000px = Area/10000,
+         ID = factor(ID)) %>%
+  dplyr::select(ID, accession, experiment, temperature, replicate, DAS_decimal, DAS,Area, Area.10000px)
+```
+
+```{r write processed phenotype data}
+write_csv(lemna, '../results/rawdata_combined_annotation_processed.csv')
+```
+

@@ -1,0 +1,65 @@
+---
+title: "005.phenotypic_variation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(nlme)
+library(wesanderson)
+library(ggpubr)
+library(cowplot)
+```
+
+```{r data}
+# phenotypes
+growth <- read_csv('../results/phenotypes.csv')
+```
+
+```{r histograms}
+# initial size
+hist.M0 <- growth %>%
+  select(accession, M0) %>%
+  ggplot(aes(x = M0)) +
+  geom_histogram(fill = 'black', bins = 50) +
+  xlab(expression(paste('initial size (', italic('M0'),')'))) +
+  ylab('accessions') +
+  theme_classic() +
+  theme(text = element_text(size = 16))
+
+# growth rate
+hist.r <- growth %>%
+  select(accession, r_16C, r_6C) %>%
+  pivot_longer(cols = contains('r_'), names_to = 'temperature', values_to = 'r', names_prefix = 'r_') %>%
+  ggplot(aes(x = r)) +
+  geom_histogram(aes(fill = temperature), alpha = 0.8, position = 'identity', bins = 50) +
+  scale_fill_manual(values = wes_palette('Darjeeling1'), labels = c('16ºC', '6ºC')) +
+  xlab(expression(paste('growth rate (', italic('r'), ')'))) +
+  ylab('accessions') +
+  theme_classic() +
+  theme(text = element_text(size = 16),
+        legend.position = 'top')
+
+# growth rate temperature response
+hist.r_response <- growth %>%
+  select(accession, r_response) %>%
+  ggplot(aes(x = r_response)) +
+  geom_histogram(fill = 'black', bins = 50) +
+  xlab(expression(paste('growth rate (', italic('r'), ') temp. response'))) +
+  ylab('accessions') +
+  theme_classic() +
+    theme(text = element_text(size = 16))
+
+# combine into one figure
+hist.plt <- ggarrange(hist.M0,
+          hist.r + labs(y = element_blank()),
+          hist.r_response + labs(y = element_blank()),
+          nrow = 1,
+          common.legend = T)
+
+ggsave(hist.plt, filename = '../figures/hist_M0_r_beta_full_nlme.pdf', width = 14)
+
+hist.plt
+```

@@ -1,0 +1,102 @@
+---
+title: "001.seedSize_correlation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(ggpubr)
+library(lme4)
+```
+
+```{r data}
+# growth phenotypes
+growth <- read_csv('../../003.growth_parameters/results/phenotypes.csv') %>%
+  mutate(accession = as.factor(accession))
+
+# meta info for all accessions
+meta <- read_csv('../../001.data/1001genomes-accessions.csv') %>%
+  mutate(ecotype_id = as.factor(ecotype_id)) %>%
+  rename(accession = ecotype_id)
+
+# admixture group coloring
+admx.col <- tibble(group = unique(meta$group), color = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a"))
+
+# seed size data
+seedSize <- read_csv('../../001.data/seed_size_swedes_lab_updated.csv') %>%
+  mutate(accession = as.factor(tg_ecotypeid)) %>%
+  dplyr::select(accession, size)
+  
+# worldclim data
+worldclim <- read_csv('../../001.data/2029_modified_MN_SH_wc2.0_30s_bilinear.csv') %>%
+  mutate(accession = as.factor(accession))
+```
+
+```{r merge data}
+# merge growth and seed size
+growthSeedSize <- inner_join(seedSize, growth, by = 'accession')
+
+# add sub population group
+growthSeedSize <- left_join(growthSeedSize, dplyr::select(meta, accession,  group), by = 'accession')
+```
+
+```{r plot intial size vs seed size}
+admx.col.vctr <- admx.col$color
+names(admx.col.vctr) <- sort(admx.col$group)
+
+M0.seedSize <- growthSeedSize %>%
+  dplyr::select(accession, size, M0, group) %>%
+  drop_na() %>%
+  ggplot(aes(x = size, y = M0)) +
+  geom_point(aes(col = group)) +
+  scale_color_manual(values = admx.col.vctr[unique(growthSeedSize$group)],
+                     name = "sub-population",
+                     labels = c('S. Sweden', 'N. Sweden', 'Admixed')) +
+  geom_smooth(method = 'lm', se = F, col = 'black') +
+  stat_cor() +
+  labs(x = 'seed size',
+       y = expression(paste('initial size (', italic('M0'), ')'))) +
+  theme_classic() +
+  theme(text = element_text(size = 16))
+```
+
+```{r plot seed size versus bio11}
+admx.col.vctr <- admx.col$color
+names(admx.col.vctr) <- sort(admx.col$group)
+
+seedSize.bio11 <- growthSeedSize %>%
+    dplyr::select(accession, size, group) %>%
+    na.omit() %>%
+    left_join(dplyr::select(worldclim, accession, bio_11), by = 'accession') %>%
+    ggplot(aes(x = bio_11, y = size)) +
+    geom_point(aes(col = group)) +
+    scale_color_manual(values = admx.col.vctr[unique(growthSeedSize$group)],
+                       name = "sub-population",
+                       labels = c('S. Sweden', 'N. Sweden', 'Admixed')) +
+    geom_smooth(method = 'lm', se = F, col = 'black') +
+    stat_cor() +
+    labs(x = 'winter temp. (ºC)',
+         y = 'seed size',
+         col = 'subpopulation') +
+    theme_classic() +
+    theme(text = element_text(size = 16))
+```
+
+```{r combine initial size vs seed size and seed size vs bio11}
+combo.plt <- ggarrange(M0.seedSize, seedSize.bio11, common.legend = T, legend = 'bottom', labels = 'AUTO')
+ggsave(combo.plt, filename = '../figures/initial_size_seedSize_bio11.pdf', width = 10.5)
+```
+
+```{r M0 vs BIO11 + seed size}
+growthSeedSizeClim <- growthSeedSize %>%
+  dplyr::select(accession, M0, size) %>%
+  left_join(dplyr::select(worldclim, accession, bio_11), by = 'accession') %>%
+  drop_na()
+
+seed.lme <- lme(M0 ~ bio_11, random = ~ 1|size, data = growthSeedSizeClim)
+anova(seed.lme)
+```
+
+

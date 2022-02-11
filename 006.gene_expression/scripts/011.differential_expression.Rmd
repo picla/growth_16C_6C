@@ -1,0 +1,230 @@
+---
+title: "011.differential_expression.Rmd"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(stringsAsFactors = F)
+library(tidyverse)
+library(DESeq2)
+library(tximport)
+```
+
+```{r data}
+# RNA-seq samples
+samples <- read_delim('../../001.data/RNAseq_samples.txt', delim = '\t') %>%
+  mutate(temperature = as.factor(temperature),
+         replicate = as.factor(replicate),
+         experiment = as.factor(paste(temperature, replicate, sep = '_')),
+         accession = as.factor(accession))
+
+# quantification data directory
+quant.dir <- '../results/006.quantification_salmon/'
+
+# araport11 annotation
+araport11 <- read.table('../../001.data/Araport11_GFF3_genes_transposons.201606.ChrM_ChrC_FullName.gtf', sep = '\t')
+```
+
+
+```{r process Araport11 GTF}
+# araport11 GTF
+colnames(araport11) <- c('chr', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attributes')
+araport11$attributes <- as.character(araport11$attributes)
+araport11[,9:10] <- str_split_fixed(araport11$attributes, ';', 3)[,1:2]
+araport11$V10 <- sub(".*id ", "", araport11$V10)
+```
+
+```{r expression data}
+# data
+expression.files <- file.path(quant.dir, samples$basename ,'_quantification_salmon/quant.sf', fsep = '')
+names(expression.files) <- samples$sample
+
+# transcript <-> gene
+tx2gene <- data.frame('transcriptID' = sub(".*id ", "", araport11$attributes), 'geneID' = araport11$V10)
+
+# import salmon quantification data
+samples.acn1 <- samples$sample[samples$accession %in% unique(samples$accession)[1]]
+txi <- tximport(expression.files[samples.acn1], tx2gene = tx2gene, type = 'salmon', dropInfReps = T)
+for (acn in unique(samples$accession)[-1])
+{
+  samples.acn <- samples$sample[samples$accession %in% acn]
+  txi.acn <- tximport(expression.files[samples.acn], tx2gene = tx2gene, type = 'salmon', dropInfReps = T)
+  # use overlapping genes
+  idx <- intersect(rownames(txi$counts), rownames(txi.acn$counts))
+  txi$abundance <- cbind(txi$abundance[idx, ], txi.acn$abundance[idx, ])
+  txi$counts <- cbind(txi$counts[idx, ], txi.acn$counts[idx, ])
+  txi$length <- cbind(txi$length[idx, ], txi.acn$length[idx, ])
+}
+
+#match Colnames with samples order
+txi$abundance <- txi$abundance[ ,samples$sample]
+txi$counts <- txi$counts[ ,samples$sample]
+txi$length <- txi$length[ ,samples$sample]
+```
+
+```{r genotype, environment or GxE}
+dds.full <- DESeqDataSetFromTximport(txi, colData = samples, design = ~  replicate + accession + temperature + replicate:temperature + accession:temperature)
+idx <- rowSums(counts(dds.full) >= 10 ) >= nrow(samples) * 0.1
+dds.full <- dds.full[idx,]
+
+diff.expr.lst<- list()
+dds.intermediate <- estimateSizeFactors(dds.full) 
+dds.intermediate <- estimateDispersions(dds.intermediate) 
+
+# G
+diff.expr.lst$genotype <- nbinomLRT(dds.intermediate, full = ~ replicate + accession + temperature + replicate:temperature + accession:temperature, reduced = ~ replicate + temperature + replicate:temperature, maxit = 5000)
+
+# E
+diff.expr.lst$temperature<- nbinomLRT(dds.intermediate, full = ~ replicate + accession + temperature + replicate:temperature + accession:temperature, reduced = ~ replicate + accession, maxit = 5000)
+
+# GxE
+diff.expr.lst$interaction <- nbinomLRT(dds.intermediate, full = ~ replicate + accession + temperature + replicate:temperature + accession:temperature, reduced = ~ replicate + accession + temperature + replicate:temperature, maxit = 5000)
+
+
+diff.expr.results.lst <- lapply(diff.expr.lst, function(x) {as_tibble(as.data.frame(results(x)), rownames = 'gene')})
+
+diff.expr <- left_join(diff.expr.results.lst$genotype, diff.expr.results.lst$temperature, by = 'gene', suffix = c('.genotype', '.temperature')) %>%
+  left_join(., diff.expr.results.lst$interaction, by = 'gene') %>%
+  rename('baseMean' = 'baseMean.GxE',
+         'log2FoldChange' = 'log2FoldChange.GxE',
+         'lfcSE' = 'lfcSE.GxE',
+         'stat' = 'stat.GxE',
+         'pvalue' = 'pvalue.GxE',
+         'padj' = 'padj.GxE')
+
+write_csv(diff.expr, '../results/differentialExpression.G.E.GxE.csv')
+```
+
+
+```{r overall DE genes 16ºC vs 6ºC}
+dds.temp <- DESeqDataSetFromTximport(txi, colData = samples, design = ~ replicate + accession + temperature + replicate:temperature)
+idx <- rowSums(counts(dds.temp) >= 10 ) >= nrow(samples) * 0.1
+dds.temp <- dds.temp[idx,]
+
+dds.temp <- estimateSizeFactors(dds.temp) 
+dds.temp <- estimateDispersions(dds.temp) 
+
+# DE analysis over all accessions
+# set reference condition
+dds.temp$temperature <- relevel(dds.temp$temperature, ref = "16C")
+#dds.temp$accession <- relevel(dds.temp$accession, ref = '6017')
+
+
+# differential expression analysis
+dds.temp.deseq <- DESeq(dds.temp)
+
+# Main effect
+# 6vs 16 over all accessions
+res.6vs16 <- as_tibble(lfcShrink(dds.temp.deseq, type = 'ashr', coef = 'temperature_6C_vs_16C'), rownames = 'gene')
+
+write_csv(res.6vs16, '../results/differentialExpression_16Vs6C.csv')
+```
+
+```{r DE genes per accession}
+dds.full <- DESeqDataSetFromTximport(txi, colData = samples, design = ~  replicate + accession + temperature + replicate:temperature + accession:temperature)
+idx <- rowSums(counts(dds.full) >= 10 ) >= nrow(samples) * 0.1
+dds.full <- dds.full[idx,]
+
+dds.full <- estimateSizeFactors(dds.full) 
+dds.full <- estimateDispersions(dds.full)
+
+# DE analysis per accession
+# set reference condition
+dds.full$temperature <- relevel(dds.full$temperature, ref = "16C")
+dds.full$accession <- relevel(dds.full$accession, ref = '6017')
+
+# differential expression analysis
+dds.full.deseq <- nbinomWaldTest(dds.full, maxit = 1000)
+
+# non-converged genes
+genes.nonConv <- rownames(dds.full.deseq)[!(mcols(dds.full.deseq)$betaConv)]
+
+dds.full.deseq <- dds.full.deseq[(mcols(dds.full.deseq)$betaConv)]
+
+# the temperature effect for 6017 (the main effect)
+res.6017.6vs16 <- lfcShrink(dds.full.deseq, type = 'ashr', coef = 'temperature_6C_vs_16C')
+
+# the temperature effect for 9728
+# this is the main effect *plus* the interaction term
+# (the extra condition effect in 9728 compared to 6017).
+res.9728.6vs16 <- lfcShrink(dds.full.deseq, type = 'ashr', contrast=list( c("temperature_6C_vs_16C","accession9728.temperature6C")))
+
+# the temperature effect for 9559
+# this is the main effect *plus* the interaction term
+# (the extra condition effect in 9559 compared to 6017).
+res.9559.6vs16 <- lfcShrink(dds.full.deseq, type = 'ashr', contrast=list( c("temperature_6C_vs_16C","accession9559.temperature6C")))
+
+# the temperature effect for 6909.
+# this is the main effect *plus* the interaction term
+# (the extra condition effect in 6909 compared to 6017).
+res.6909.6vs16 <- lfcShrink(dds.full.deseq, type = 'ashr', contrast=list( c("temperature_6C_vs_16C","accession6909.temperature6C")))
+
+# the temperature effect for 8242
+# this is the main effect *plus* the interaction term
+# (the extra condition effect in 8242 compared to 6017).
+res.8242.6vs16 <- lfcShrink(dds.full.deseq, type = 'ashr', contrast=list( c("temperature_6C_vs_16C","accession8242.temperature6C")))
+
+# the temperature effect for 9888
+# this is the main effect *plus* the interaction term
+# (the extra condition effect in 9888 compared to 6017).
+res.9888.6vs16 <- lfcShrink(dds.full.deseq, type = 'ashr', contrast=list( c("temperature_6C_vs_16C","accession9888.temperature6C")))
+res.9888.6vs16 <- res.9888.6vs16[!is.na(res.9888.6vs16$padj), ] 
+
+# the temperature effect for 9433
+# this is the main effect *plus* the interaction term
+# (the extra condition effect in 9433 compared to 6017).
+res.9433.6vs16 <- lfcShrink(dds.full.deseq, type = 'ashr', contrast=list( c("temperature_6C_vs_16C","accession9433.temperature6C")))
+
+# the temperature effect for 9075
+# this is the main effect *plus* the interaction term
+# (the extra condition effect in 9075 compared to 6017).
+res.9075.6vs16 <- lfcShrink(dds.full.deseq, type = 'ashr', contrast=list( c("temperature_6C_vs_16C","accession9075.temperature6C")))
+```
+
+```{r gather differential expression per accession}
+res.6vs16.perAcn.wide <- full_join(dplyr::select(as_tibble(res.6017.6vs16, rownames = 'gene'), gene, log2FoldChange, padj),
+          dplyr::select(as_tibble(res.6909.6vs16, rownames = 'gene'), gene, log2FoldChange, padj),
+          by = 'gene', suffix = c('_6017', '_6909')) %>%
+  full_join(.,
+            dplyr::select(as_tibble(res.8242.6vs16, rownames = 'gene'), gene, log2FoldChange, padj),
+            by = 'gene') %>%
+  dplyr::rename(log2FoldChange_8242 = log2FoldChange, padj_8242 = padj) %>%
+  full_join(.,
+            dplyr::select(as_tibble(res.9075.6vs16, rownames = 'gene'), gene, log2FoldChange, padj),
+            by = 'gene') %>%
+  dplyr::rename(log2FoldChange_9075 = log2FoldChange, padj_9075 = padj) %>%
+  full_join(.,
+            dplyr::select(as_tibble(res.9433.6vs16, rownames = 'gene'), gene, log2FoldChange, padj),
+            by = 'gene') %>%
+  dplyr::rename(log2FoldChange_9433 = log2FoldChange, padj_9433 = padj) %>%
+  full_join(.,
+            dplyr::select(as_tibble(res.9559.6vs16, rownames = 'gene'), gene, log2FoldChange, padj),
+            by = 'gene') %>%
+  dplyr::rename(log2FoldChange_9559 = log2FoldChange, padj_9559 = padj) %>%
+  full_join(.,
+            dplyr::select(as_tibble(res.9728.6vs16, rownames = 'gene'), gene, log2FoldChange, padj),
+            by = 'gene') %>%
+  dplyr::rename(log2FoldChange_9728 = log2FoldChange, padj_9728 = padj) %>%
+  full_join(.,
+            dplyr::select(as_tibble(res.9888.6vs16, rownames = 'gene'), gene, log2FoldChange, padj),
+            by = 'gene') %>%
+  dplyr::rename(log2FoldChange_9888 = log2FoldChange, padj_9888 = padj)
+  
+res.FC <- dplyr::select(res.6vs16.perAcn.wide, gene, contains('log2FoldChange')) %>%
+  pivot_longer(cols = contains('log2FoldChange'),
+               names_to = 'accession',
+               names_prefix = 'log2FoldChange_',
+               values_to = 'log2FoldChange')
+
+res.padj <- dplyr::select(res.6vs16.perAcn.wide, gene, contains('padj')) %>%
+  pivot_longer(cols = contains('padj'),
+               names_to = 'accession',
+               names_prefix = 'padj_',
+               values_to = 'padj')
+
+res.6vs16.perAcn.long <- full_join(res.FC, res.padj, by = c('gene', 'accession'))
+write.csv(res.6vs16.perAcn.long, '../results/differentialExpression_16Vs6C_perAccession.csv')
+```
+
+
