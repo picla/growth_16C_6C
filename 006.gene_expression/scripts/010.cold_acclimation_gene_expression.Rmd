@@ -33,7 +33,7 @@ worldclim <- read_csv('../../001.data/2029_modified_MN_SH_wc2.0_30s_bilinear.csv
 ## cold acclimation genes
 # CBF regulon according Park et al., 2015
 CBF_UP.Park <- read_delim('../../001.data/CBF_regulon_UP_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
-CBF_DOWN.Park <- read_delim('/groups/nordborg/projects/cold_adaptation_16Cvs6C/003.transcriptome/001.8accessions/004.cold_acclimation_gene_expression/001.data/CBF_regulon_UP_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
+CBF_DOWN.Park <- read_delim('../../001.data/CBF_regulon_DOWN_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
 
 # HSFC1 regulon according Park et al., 2015
 HSFC1 <- read_delim('../../001.data/HSFC1_regulon_ParkEtAl2015.txt', delim = '\t', col_names = 'gene')
@@ -75,7 +75,6 @@ samples <- filter(samples, Selected == 'yes') %>%
          sampleName = paste(accession, temperature, replicate, sep = '_')) %>%
     left_join(., worldclim[, c('accession', 'bio_11')], by = 'accession')
 ```
-
 
 ```{r heatmap cold acclimation genes}
 library(pheatmap)
