@@ -22,7 +22,7 @@ growth <- read_csv('../../003.growth_parameters/results/phenotypes.csv') %>%
   mutate(accession = as.factor(accession))
 
 # SNP matrix
-G.h5 <- '../../001.data/all_chromosomes_binary_gzip.hdf5'
+G.h5 <- '../../001.data/all_chromosomes_binary_gzip_attrs.hdf5'
 
 # meta info for all accessions
 meta <- read_csv('../../001.data/1001genomes-accessions.csv') %>%
