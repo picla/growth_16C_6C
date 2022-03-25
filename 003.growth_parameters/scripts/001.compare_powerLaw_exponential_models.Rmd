@@ -8,6 +8,7 @@ knitr::opts_chunk$set(echo = TRUE)
 options(stringsAsFactors = F)
 library(tidyverse)
 library(nlme)
+library(kableExtra)
 ```
 
 ```{r data}
@@ -82,6 +83,19 @@ fit.exp.1 <- nlme(fit.lis.exp,
                    verbose = T)
 ```
 ```{r comparison}
-anova(fit.exp.1, fit.pow.1)
+exp.pow.aov <- anova(fit.exp.1, fit.pow.1)
 ```
+```{r export anova table}
+exp.pow.aov.df <- data.frame(exp.pow.aov[2:9])
+exp.pow.aov.df$p.value <- format.pval(exp.pow.aov.df$p.value, eps = 0.001, digits = 2)
+exp.pow.aov.df$L.Ratio <- round(as.numeric(exp.pow.aov.df$L.Ratio))
+rownames(exp.pow.aov.df) <-  c('exponential', 'power law')
+exp.pow.aov.df[is.na(exp.pow.aov.df)] <- '-'
+exp.pow.aov.df[exp.pow.aov.df == 'NA'] <- '-'
+
+
+kable(exp.pow.aov.df, 'latex', booktabs = T, digits = 3) %>%
+  save_kable(x = ., file = '../figures/expVSpowLaw_anova.pdf', keep_tex = T)
+```
+
 
