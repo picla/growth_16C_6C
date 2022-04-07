@@ -3,7 +3,6 @@ title: "001.climate_correlations"
 output: html_document
 ---
 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 options(stringsAsFactors = F)
@@ -30,7 +29,10 @@ meta <- read_csv('../../001.data/1001genomes-accessions.csv') %>%
   mutate(ecotype_id = as.factor(ecotype_id)) %>% rename(accession = ecotype_id)
 
 # admixture group coloring
-admx.col <- tibble(group = unique(meta$group), color = c("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a"))
+# colors taken from https://colorbrewer2.org/?type=qualitative&scheme=Paired&n=10
+admx.col.lst <- list("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a")
+names(admx.col.lst) <- sort(unique(meta$group))
+admx.col.lst <- admx.col.lst[names(admx.col.lst) != 'asia']
 
 # open kinship hdf5
 K_hdf <- H5Fopen("../../001.data/kinship_ibs_binary_mac5.h5py")
@@ -141,6 +143,7 @@ heatmap.dendro.col <- function(heatmap.mtrx, dist.method = 'euclidean', clust.me
               'dendro_data_col' = dendro_data_col))
 }
 ```
+
 ```{r general variables}
 # select phenotypes
 phenotypes <- colnames(pheno)[c(2:5)]
@@ -149,6 +152,7 @@ phenotypes <- colnames(pheno)[c(2:5)]
 clim.vars <- colnames(worldclim)[-1]
 clim.vars.season <- clim.vars[grepl('.*_.*[_.*]+.*', clim.vars) | grepl('bio.*', clim.vars)]
 ```
+
 ```{r phenotype and climate descriptions}
 clim.descr <- tibble(climateVar = clim.vars.season, description = clim.vars.season) %>%
   mutate(description = str_replace_all(description, c('01_02_03' = '1st quart.',
@@ -191,6 +195,7 @@ pheno.labels <- c('M0' = expression(paste('initial size (', italic('M0'), ')')),
                   'r_6C' = expression(paste('growth rate (', italic('r'), ') 6ºC')),
                   'r_response' = expression(paste('growth rate (', italic('r'), ') temp. response')))
 ```
+
 ```{r combine growth and climate data}
 phenoClim <- pheno %>%
   dplyr::select(accession, all_of(phenotypes)) %>%
@@ -339,7 +344,7 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
     drop_na() %>%
     ggplot(aes_string(x = 'bio_11', y = pheno)) +
     geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col$color) +
+    scale_color_manual(values = admx.col.lst) +
     geom_smooth(method = 'lm', se = F, color = 'grey') +
     stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
     theme_classic() +
@@ -368,7 +373,7 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
     filter(!(group %in% c('north_sweden', 'south_sweden'))) %>%
     ggplot(aes_string(x = 'bio_11', y = pheno)) +
     geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col$color) +
+    scale_color_manual(values = admx.col.lst) +
     geom_smooth(method = 'lm', se = F, color = 'grey') +
     stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
     theme_classic() +
@@ -385,6 +390,7 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
 bio11.exclSWE.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
 ggsave(bio11.exclSWE.plt, filename = '../figures/growthParametersVSbio11.excludeSWE.pdf', width = 10.5, height = 10.5)
 ```
+
 ```{r growth parameters vs bio11 - only Swedish accessions}
 # bio11 correlation plots
 bio11.plt.lst <- map(phenotypes, function(pheno){
@@ -395,7 +401,7 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
     filter(group %in% c('north_sweden', 'south_sweden')) %>%
     ggplot(aes_string(x = 'bio_11', y = pheno)) +
     geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col$color) +
+    scale_color_manual(values = admx.col.lst) +
     geom_smooth(method = 'lm', se = F, color = 'grey') +
     stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
     theme_classic() +
@@ -445,7 +451,7 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
     left_join(bio11.median, by = 'group') %>%
     ggplot(aes(x = bio11.median, y = pheno.CV)) +
     geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col$color) +
+    scale_color_manual(values = admx.col.lst) +
     geom_smooth(method = 'lm', se = F, color = 'grey') +
     stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
     theme_classic() +
@@ -462,7 +468,6 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
 bio11.CV.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
 ggsave(bio11.CV.plt, filename = '../figures/growthParametersCoefVarVSbio11.pdf', width = 10.5, height = 10.5)
 ```
-
 
 ```{r coefficient of varaince of each growth parametr vs bio11 - exclude asian accessions}
 coefVar<- function(x){
@@ -497,7 +502,7 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
     filter(group != 'asia') %>%
     ggplot(aes(x = bio11.median, y = pheno.CV)) +
     geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col$color) +
+    scale_color_manual(values = admx.col.lst) +
     geom_smooth(method = 'lm', se = F, color = 'grey') +
     stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
     theme_classic() +
@@ -515,3 +520,30 @@ bio11.CV.exclAsian.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2
 ggsave(bio11.CV.exclAsian.plt, filename = '../figures/growthParametersCoefVarVSbio11.excludeAsian.pdf', width = 10.5, height = 10.5)
 ```
 
+```{r growth parameters vs bio11 - exclude Asian accessions}
+# bio11 correlation plots
+bio11.plt.lst <- map(phenotypes, function(pheno){
+  phenoClim %>%
+    select(accession, !!pheno, bio_11) %>%
+    left_join(select(meta, accession, group), by = 'accession') %>%
+    drop_na() %>%
+    filter(!(group %in% c('asia'))) %>%
+    ggplot(aes_string(x = 'bio_11', y = pheno)) +
+    geom_point(aes(color = group)) +
+    scale_color_manual(values = admx.col.lst) +
+    geom_smooth(method = 'lm', se = F, color = 'grey') +
+    stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
+    theme_classic() +
+    labs(x = 'winter temp. (ºC)',
+         y = pheno.labels[pheno],
+         color = 'subpopulation') +
+    theme(legend.position = 'bottom',
+          text = element_text(size = 16),
+          axis.title.y = element_text(size = 16)) +
+    guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
+})
+
+
+bio11.exclASIA.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
+ggsave(bio11.exclASIA.plt, filename = '../figures/growthParametersVSbio11.excludeASIA.pdf', width = 10.5, height = 10.5)
+```
