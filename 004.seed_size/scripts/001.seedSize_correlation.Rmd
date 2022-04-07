@@ -8,6 +8,7 @@ knitr::opts_chunk$set(echo = TRUE)
 options(stringsAsFactors = F)
 library(tidyverse)
 library(ggpubr)
+library(nlme)
 library(lme4)
 ```
 
@@ -98,5 +99,21 @@ growthSeedSizeClim <- growthSeedSize %>%
 seed.lme <- lme(M0 ~ bio_11, random = ~ 1|size, data = growthSeedSizeClim)
 anova(seed.lme)
 ```
+
+```{r variance decomposition}
+# no seed size correction
+M0_bio11.lmer <- lmer(M0 ~ 1 + (1|bio_11), data = growthSeedSizeClim)
+M0_bio11.varcomp <- VarCorr(M0_bio11.lmer) %>%
+  as_tibble() %>%
+  mutate(percVar = sdcor/sum(sdcor))
+
+# seed size correction
+M0_bio11_seedSize.lmer <- lmer(M0 ~ 1 + (1|bio_11) + (1|size), data = growthSeedSizeClim)
+M0_bio11_seedSize.varcomp <- VarCorr(M0_bio11_seedSize.lmer) %>%
+  as_tibble() %>%
+  mutate(percVar = sdcor/sum(sdcor))
+
+```
+
 
 
