@@ -375,7 +375,7 @@ bio11_r_resp.exclSWE.plt <- phenoClim %>%
   ggplot(aes(x = bio_11, y = r_response)) +
   geom_point(aes(color = group)) +
   scale_color_manual(values = admx.col.lst[!(names(admx.col.lst) %in% c('north_sweden', 'south_sweden'))],
-                     labels = ) +
+                     labels = admx.labels.lst[!(names(admx.labels.lst) %in% c('north_sweden', 'south_sweden'))]) +
   geom_smooth(method = 'lm', se = F, color = 'grey') +
   stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
   theme_classic() +
@@ -388,7 +388,7 @@ bio11_r_resp.exclSWE.plt <- phenoClim %>%
   guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 
 
-ggsave(bio11_r_resp.exclSWE.plt, filename = '../figures/r_responseVSbio11.excludeSWE.pdf', width = 10.5, height = 5.25)
+ggsave(bio11_r_resp.exclSWE.plt, filename = '../figures/r_responseVSbio11.excludeSWE.pdf', width = 10.5, height = 10.5)
 ```
 
 ```{r growth parameters vs bio11 - only Swedish accessions}
@@ -400,7 +400,8 @@ bio11_r_resp.onlySWE.plt <- phenoClim %>%
   filter(group %in% c('north_sweden', 'south_sweden')) %>%
   ggplot(aes(x = bio_11, y = r_response)) +
   geom_point(aes(color = group)) +
-  scale_color_manual(values = admx.col.lst[(names(admx.col.lst) %in% c('north_sweden', 'south_sweden'))]) +
+  scale_color_manual(values = admx.col.lst[(names(admx.col.lst) %in% c('north_sweden', 'south_sweden'))],
+                     labels = admx.labels.lst[(names(admx.labels.lst) %in% c('north_sweden', 'south_sweden'))]) +
   geom_smooth(method = 'lm', se = F, color = 'grey') +
   stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
   theme_classic() +
@@ -417,9 +418,11 @@ ggsave(bio11_r_resp.onlySWE.plt, filename = '../figures/r_responseVSbio11.onlySW
 
 ```{r combine figures of only Swedish and without Swedisch accessions}
 bio11_r_resp.comboSWE.plt <- ggarrange(bio11_r_resp.onlylSWE.plt +
-                                           scale_color_manual(values = admx.col.lst),
+                                           scale_color_manual(values = admx.col.lst,
+                                                              labels = admx.labels.lst),
                                        bio11_r_resp.exclSWE.plt +
-                                           scale_color_manual(values = admx.col.lst),
+                                           scale_color_manual(values = admx.col.lst,
+                                                              labels = admx.labels.lst),
                                        labels = 'AUTO', ncol = 2, nrow = 1, common.legend = T, legend = 'bottom')
 ggsave(bio11_r_resp.comboSWE.plt, filename = '../figures/r_responseVSbio11.comboSWE.pdf', width = 10.5, height = 5.25)
 ```
@@ -455,7 +458,8 @@ r_response_bio11.CV.plt <- r_response.CV %>%
     left_join(bio11.median, by = 'group') %>%
     ggplot(aes(x = bio11.median, y = r_response.CV)) +
     geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col.lst) +
+    scale_color_manual(values = admx.col.lst,
+                       labels = admx.labels.lst) +
     geom_smooth(method = 'lm', se = F, color = 'grey') +
     stat_cor(method = 'pearson', size = 5, label.x.npc = 0.82, label.y.npc = 'top') +
     theme_classic() +
