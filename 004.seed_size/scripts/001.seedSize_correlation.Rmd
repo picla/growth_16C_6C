@@ -112,7 +112,6 @@ M0_bio11_seedSize.lmer <- lmer(M0 ~ 1 + (1|bio_11) + (1|size), data = growthSeed
 M0_bio11_seedSize.varcomp <- VarCorr(M0_bio11_seedSize.lmer) %>%
   as_tibble() %>%
   mutate(percVar = sdcor/sum(sdcor))
-
 ```
 
 
