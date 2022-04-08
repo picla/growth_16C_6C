@@ -346,7 +346,8 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
     drop_na() %>%
     ggplot(aes_string(x = 'bio_11', y = pheno)) +
     geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col.lst) +
+    scale_color_manual(values = admx.col.lst,
+                       labels = admx.labels.lst) +
     geom_smooth(method = 'lm', se = F, color = 'grey') +
     stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
     theme_classic() +
@@ -360,7 +361,7 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
 })
 
 
-bio11.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
+bio11.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom', labels = 'AUTO')
 
 ggsave(bio11.plt, filename = '../figures/growthParametersVSbio11.pdf', width = 10.5, height = 10.5)
 ```
