@@ -32,7 +32,9 @@ meta <- read_csv('../../001.data/1001genomes-accessions.csv') %>%
 # colors taken from https://colorbrewer2.org/?type=qualitative&scheme=Paired&n=10
 admx.col.lst <- list("#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a")
 names(admx.col.lst) <- sort(unique(meta$group))
-admx.col.lst <- admx.col.lst[names(admx.col.lst) != 'asia']
+
+admx.labels.lst <-  list('Admixed', 'Asia', 'C. Europe', 'Germany', 'Italy/Balkan/Caucasus', 'N. Sweden', 'Relict', 'S. Sweden', 'Spain', 'W. Europe')
+names(admx.labels.lst) <- sort(unique(meta$group))
 
 # open kinship hdf5
 K_hdf <- H5Fopen("../../001.data/kinship_ibs_binary_mac5.h5py")
@@ -363,61 +365,65 @@ bio11.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.lege
 ggsave(bio11.plt, filename = '../figures/growthParametersVSbio11.pdf', width = 10.5, height = 10.5)
 ```
 
-```{r growth parameters vs bio11 - exclude Swedish accessions}
+```{r growth response - exclude Swedish accessions}
 # bio11 correlation plots
-bio11.plt.lst <- map(phenotypes, function(pheno){
-  phenoClim %>%
-    select(accession, !!pheno, bio_11) %>%
-    left_join(select(meta, accession, group), by = 'accession') %>%
-    drop_na() %>%
-    filter(!(group %in% c('north_sweden', 'south_sweden'))) %>%
-    ggplot(aes_string(x = 'bio_11', y = pheno)) +
-    geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col.lst) +
-    geom_smooth(method = 'lm', se = F, color = 'grey') +
-    stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
-    theme_classic() +
-    labs(x = 'winter temp. (ºC)',
-         y = pheno.labels[pheno],
-         color = 'subpopulation') +
-    theme(legend.position = 'bottom',
-          text = element_text(size = 16),
-          axis.title.y = element_text(size = 16)) +
-    guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
-})
+bio11_r_resp.exclSWE.plt <- phenoClim %>%
+    select(accession, r_response, bio_11) %>%
+  left_join(select(meta, accession, group), by = 'accession') %>%
+  drop_na() %>%
+  filter(!(group %in% c('north_sweden', 'south_sweden'))) %>%
+  ggplot(aes(x = bio_11, y = r_response)) +
+  geom_point(aes(color = group)) +
+  scale_color_manual(values = admx.col.lst[!(names(admx.col.lst) %in% c('north_sweden', 'south_sweden'))],
+                     labels = ) +
+  geom_smooth(method = 'lm', se = F, color = 'grey') +
+  stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
+  theme_classic() +
+  labs(x = 'winter temp. (ºC)',
+       y = pheno.labels['r_response'],
+       color = 'subpopulation') +
+  theme(legend.position = 'bottom',
+        text = element_text(size = 16),
+        axis.title.y = element_text(size = 16)) +
+  guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 
 
-bio11.exclSWE.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
-ggsave(bio11.exclSWE.plt, filename = '../figures/growthParametersVSbio11.excludeSWE.pdf', width = 10.5, height = 10.5)
+ggsave(bio11_r_resp.exclSWE.plt, filename = '../figures/r_responseVSbio11.excludeSWE.pdf', width = 10.5, height = 5.25)
 ```
 
 ```{r growth parameters vs bio11 - only Swedish accessions}
 # bio11 correlation plots
-bio11.plt.lst <- map(phenotypes, function(pheno){
-  phenoClim %>%
-    select(accession, !!pheno, bio_11) %>%
-    left_join(select(meta, accession, group), by = 'accession') %>%
-    drop_na() %>%
-    filter(group %in% c('north_sweden', 'south_sweden')) %>%
-    ggplot(aes_string(x = 'bio_11', y = pheno)) +
-    geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col.lst) +
-    geom_smooth(method = 'lm', se = F, color = 'grey') +
-    stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
-    theme_classic() +
-    labs(x = 'winter temp. (ºC)',
-         y = pheno.labels[pheno],
-         color = 'subpopulation') +
-    theme(legend.position = 'bottom',
-          text = element_text(size = 16),
-          axis.title.y = element_text(size = 16)) +
-    guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
-})
+bio11_r_resp.onlySWE.plt <- phenoClim %>%
+  select(accession, r_response, bio_11) %>%
+  left_join(select(meta, accession, group), by = 'accession') %>%
+  drop_na() %>%
+  filter(group %in% c('north_sweden', 'south_sweden')) %>%
+  ggplot(aes(x = bio_11, y = r_response)) +
+  geom_point(aes(color = group)) +
+  scale_color_manual(values = admx.col.lst[(names(admx.col.lst) %in% c('north_sweden', 'south_sweden'))]) +
+  geom_smooth(method = 'lm', se = F, color = 'grey') +
+  stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
+  theme_classic() +
+  labs(x = 'winter temp. (ºC)',
+       y = pheno.labels['r_response'],
+       color = 'subpopulation') +
+  theme(legend.position = 'bottom',
+        text = element_text(size = 16),
+        axis.title.y = element_text(size = 16)) +
+  guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 
-
-bio11.onlySWE.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
-ggsave(bio11.onlySWE.plt, filename = '../figures/growthParametersVSbio11.onlySWE.pdf', width = 10.5, height = 10.5)
+ggsave(bio11_r_resp.onlySWE.plt, filename = '../figures/r_responseVSbio11.onlySWE.pdf', width = 10.5, height = 10.5)
 ```
+
+```{r combine figures of only Swedish and without Swedisch accessions}
+bio11_r_resp.comboSWE.plt <- ggarrange(bio11_r_resp.onlylSWE.plt +
+                                           scale_color_manual(values = admx.col.lst),
+                                       bio11_r_resp.exclSWE.plt +
+                                           scale_color_manual(values = admx.col.lst),
+                                       labels = 'AUTO', ncol = 2, nrow = 1, common.legend = T, legend = 'bottom')
+ggsave(bio11_r_resp.comboSWE.plt, filename = '../figures/r_responseVSbio11.comboSWE.pdf', width = 10.5, height = 5.25)
+```
+
 
 ```{r coefficient of varaince of each growth parametr vs bio11}
 coefVar<- function(x){
@@ -431,14 +437,12 @@ coefVar.labels <- c('M0' = expression(paste('initial size (', italic('M0'), ') C
 
 # correlate coefficients of variance for each growth parameter against bio11
 # bio11 correlation plots
-bio11.plt.lst <- map(phenotypes, function(pheno){
-  pheno.CV <- phenoClim %>%
-    select(accession, !!pheno) %>%
-    rename('phenotype' = !!pheno) %>%
+  r_response.CV <- phenoClim %>%
+    select(accession, r_response) %>%
     left_join(select(meta, accession, group), by = 'accession') %>%
     drop_na() %>%
     group_by(group) %>%
-    summarise(pheno.CV = coefVar(phenotype))
+    summarise(r_response.CV = coefVar(r_response))
   
   bio11.median <-  phenoClim %>%
     select(accession, bio_11) %>%
@@ -447,78 +451,25 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
     group_by(group) %>%
     summarise(bio11.median = median(bio_11))
   
-  pheno.CV %>%
+r_response_bio11.CV.plt <- r_response.CV %>%
     left_join(bio11.median, by = 'group') %>%
-    ggplot(aes(x = bio11.median, y = pheno.CV)) +
+    ggplot(aes(x = bio11.median, y = r_response.CV)) +
     geom_point(aes(color = group)) +
     scale_color_manual(values = admx.col.lst) +
     geom_smooth(method = 'lm', se = F, color = 'grey') +
-    stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
+    stat_cor(method = 'pearson', size = 5, label.x.npc = 0.82, label.y.npc = 'top') +
     theme_classic() +
     labs(x = 'median winter temp. (ºC)',
-         y = coefVar.labels[pheno],
+         y = coefVar.labels['r_response'],
          color = 'subpopulation') +
     theme(legend.position = 'bottom',
           text = element_text(size = 16),
           axis.title.y = element_text(size = 16)) +
     guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
-})
 
-
-bio11.CV.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
-ggsave(bio11.CV.plt, filename = '../figures/growthParametersCoefVarVSbio11.pdf', width = 10.5, height = 10.5)
+ggsave(r_response_bio11.CV.plt, filename = '../figures/r_responseCoefVarVSbio11.pdf', width = 10.5, height = 10.5)
 ```
 
-```{r coefficient of varaince of each growth parametr vs bio11 - exclude asian accessions}
-coefVar<- function(x){
-  cv <- sd(x)/mean(x)
-  return(cv)}
-
-coefVar.labels <- c('M0' = expression(paste('initial size (', italic('M0'), ') CV')),
-                  'r_16C' = expression(paste('growth rate (', italic('r'), ') 16ºC CV')),
-                  'r_6C' = expression(paste('growth rate (', italic('r'), ') 6ºC cv')),
-                  'r_response' = expression(paste('growth rate (', italic('r'), ') temp. response CV')))
-
-# correlate coefficients of variance for each growth parameter against bio11
-# bio11 correlation plots
-bio11.plt.lst <- map(phenotypes, function(pheno){
-  pheno.CV <- phenoClim %>%
-    select(accession, !!pheno) %>%
-    rename('phenotype' = !!pheno) %>%
-    left_join(select(meta, accession, group), by = 'accession') %>%
-    drop_na() %>%
-    group_by(group) %>%
-    summarise(pheno.CV = coefVar(phenotype))
-  
-  bio11.median <-  phenoClim %>%
-    select(accession, bio_11) %>%
-    left_join(select(meta, accession, group), by = 'accession') %>%
-    drop_na() %>%
-    group_by(group) %>%
-    summarise(bio11.median = median(bio_11))
-  
-  pheno.CV %>%
-    left_join(bio11.median, by = 'group') %>%
-    filter(group != 'asia') %>%
-    ggplot(aes(x = bio11.median, y = pheno.CV)) +
-    geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col.lst) +
-    geom_smooth(method = 'lm', se = F, color = 'grey') +
-    stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
-    theme_classic() +
-    labs(x = 'median winter temp. (ºC)',
-         y = coefVar.labels[pheno],
-         color = 'subpopulation') +
-    theme(legend.position = 'bottom',
-          text = element_text(size = 16),
-          axis.title.y = element_text(size = 16)) +
-    guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
-})
-
-
-bio11.CV.exclAsian.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
-ggsave(bio11.CV.exclAsian.plt, filename = '../figures/growthParametersCoefVarVSbio11.excludeAsian.pdf', width = 10.5, height = 10.5)
-```
 
 ```{r growth parameters vs bio11 - exclude Asian accessions}
 # bio11 correlation plots
