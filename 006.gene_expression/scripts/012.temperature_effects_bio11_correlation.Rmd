@@ -77,9 +77,38 @@ chisq.DE$p.value
 ```
 
 ```{r compare bio11 correlation distribution between cold acclimation up and down regulated genes}
+cold_acclimation_genes_up <- unique(c(CBF_UP.Park$gene, CBF.TF, CAMTA.TF, ZAT12_UP$AGI, HSFC1$gene))
+cold_acclimation_genes_down <- unique(c(CBF_DOWN.Park$gene, ZAT12_DOWN$AGI))
+
+# remove genes that are both in UP and DOWN datasets
+cold_acclimation_genes_up <- cold_acclimation_genes_up[!cold_acclimation_genes_up %in% cold_acclimation_genes_down]
+cold_acclimation_genes_down <- cold_acclimation_genes_down[!cold_acclimation_genes_down %in% cold_acclimation_genes_up]
+
+# get correlation with bio_11 for each gene
+cold_acclimation_genes.climCor <- bind_rows(
+  map(cold_acclimation_genes[cold_acclimation_genes %in% colnames(counts.varStab)], function(gene){
+    direction <- ifelse(gene %in% cold_acclimation_genes_up, 'up',
+                            ifelse(gene %in% cold_acclimation_genes_down, 'down', NA))
+    
+    gene.cor.tbl <- bind_rows(
+      map(c('16C', '6C'), function(temp){
+        counts.varStab.gene.temp <- NULL
+        counts.varStab.gene.temp <- dplyr::select(counts.varStab, accession, temperature, replicate, !!gene) %>%
+          filter(temperature == !!temp) %>%
+          mutate(accession = as.factor(accession)) %>%
+          left_join(., dplyr::select(worldclim, accession, bio_11), by = 'accession') 
+
+        gene.cor <- cor.test(y = counts.varStab.gene.temp[[gene]],  x = counts.varStab.gene.temp$bio_11)
+        gene.cor.tbl <- tibble(gene = gene, temperature = temp, direction = direction, cor = gene.cor$estimate, pval = gene.cor$p.value)
+        return(gene.cor.tbl)
+      }))
+    return(gene.cor.tbl)
+  })) %>%
+    mutate(padj = p.adjust(pval, method = 'BH'))
+
+# summarise as boxplot
 cor.boxplt <- cold_acclimation_genes.climCor %>%
   filter(temperature != 'overall') %>%
-  #mutate(direction = factor(direction, levels = c('up', 'down'), ordered = T)) %>%
   ggplot(aes(x = temperature, y = cor, col = direction)) +
   geom_boxplot() +
   stat_compare_means(method = "t.test", aes(label = paste0("p = ", ..p.format..))) +
