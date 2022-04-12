@@ -27,7 +27,7 @@ hist.M0 <- growth %>%
   xlab(expression(paste('initial size (', italic('M0'),')'))) +
   ylab('accessions') +
   theme_classic() +
-  theme(text = element_text(size = 20))
+  theme(text = element_text(size = 22))
 
 # growth rate
 hist.r <- growth %>%
@@ -39,7 +39,7 @@ hist.r <- growth %>%
   xlab(expression(paste('growth rate (', italic('r'), ')'))) +
   ylab('accessions') +
   theme_classic() +
-  theme(text = element_text(size = 20),
+  theme(text = element_text(size = 22),
         legend.position = 'top')
 
 # growth rate temperature response
@@ -50,7 +50,7 @@ hist.r_response <- growth %>%
   xlab(expression(paste('growth rate (', italic('r'), ') temp. response'))) +
   ylab('accessions') +
   theme_classic() +
-    theme(text = element_text(size = 20))
+    theme(text = element_text(size = 22))
 
 # combine into one figure
 hist.plt <- ggarrange(hist.M0,
@@ -59,9 +59,9 @@ hist.plt <- ggarrange(hist.M0,
           nrow = 1,
           common.legend = T,
           labels = 'AUTO',
-          font.label = list(size = 20))
+          font.label = list(size = 22))
 
-ggsave(hist.plt, filename = '../figures/hist_M0_r_beta_full_nlme.pdf', width = 21)
+ggsave(hist.plt, filename = '../figures/hist_M0_r_beta.pdf', width = 21, height = 7)
 
 hist.plt
 ```
