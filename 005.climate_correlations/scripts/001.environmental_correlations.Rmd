@@ -355,15 +355,16 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
          y = pheno.labels[pheno],
          color = 'subpopulation') +
     theme(legend.position = 'bottom',
-          text = element_text(size = 16),
-          axis.title.y = element_text(size = 16)) +
+          text = element_text(size = 20),
+          legend.text = element_text(size = 18),
+          axis.title.y = element_text(size = 20)) +
     guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 })
 
 
-bio11.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom', labels = 'AUTO')
+bio11.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom', labels = 'AUTO', font.label = list(size = 20))
 
-ggsave(bio11.plt, filename = '../figures/growthParametersVSbio11.pdf', width = 10.5, height = 10.5)
+ggsave(bio11.plt, filename = '../figures/growthParametersVSbio11.pdf', width = 14, height = 14)
 ```
 
 ```{r growth response - exclude Swedish accessions}
