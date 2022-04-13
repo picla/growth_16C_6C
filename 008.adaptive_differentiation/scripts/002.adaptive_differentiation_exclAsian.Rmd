@@ -175,7 +175,7 @@ quaint.plt.lst <- map(phenotypes, function(pheno.name)
       geom_point(aes(color = group)) +
       scale_color_manual(values = admx.col.lst,
                          labels = admx.labels.lst) +
-      labs(x = paste0('PC', PC.nr), y = pheno.labels[pheno.name]) +
+      labs(x = paste0('PC', PC.nr), y = pheno.labels[pheno.name], color = 'subpopulation') +
       theme_classic()
     print(PC.pheno.plt.admx)
     return(PC.pheno.plt.admx)
@@ -209,30 +209,24 @@ write_csv(Qpc.pvals, file = '../results/quaint_pvalues_excludeAsia.csv')
 
 ```{r plot M0 vs PC6, r_16C vs PC5 r_response vs PC5 in combined figure, message = F}
 M0_PC1.plt <- quaint.plt.lst$M0$PC1 +
-  theme(text = element_text(size = 16),
-        legend.title = element_blank())
-
+  theme(text = element_text(size = 20))
 
 M0_PC5.plt <- quaint.plt.lst$M0$PC5 +
-  theme(text = element_text(size = 16),
-        legend.title = element_blank())
+  theme(text = element_text(size = 20))
 
 M0_PC9.plt <- quaint.plt.lst$M0$PC9 +
-  theme(text = element_text(size = 16),
-        legend.title = element_blank())
+  theme(text = element_text(size = 20))
 
 r_16C_PC5.plt <- quaint.plt.lst$r_16C$PC5 +
-  theme(text = element_text(size = 16),
-        legend.title = element_blank())
+  theme(text = element_text(size = 20))
 
 r_response_PC5.plt <- quaint.plt.lst$r_response$PC5 +
-  theme(text = element_text(size = 16),
-        legend.title = element_blank())
+  theme(text = element_text(size = 20))
 
 combo.plt <- ggarrange(M0_PC1.plt, M0_PC5.plt, M0_PC9.plt, r_16C_PC5.plt, r_response_PC5.plt, common.legend = T, legend = 'bottom', ncol = 3, nrow = 2, labels = 'AUTO')
 
 
 ggsave(filename = '../figures/quaint_M0_PC1_M0_PC5_M0_PC9_r_16C_resp_PC5_excludeAsia.pdf',
        plot = combo.plt,
-       width = 14, height = 9.4)
+       width = 21, height = 14)
 ```
