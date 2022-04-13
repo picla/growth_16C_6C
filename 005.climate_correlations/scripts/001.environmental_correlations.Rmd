@@ -495,12 +495,11 @@ bio11.plt.lst <- map(phenotypes, function(pheno){
          y = pheno.labels[pheno],
          color = 'subpopulation') +
     theme(legend.position = 'bottom',
-          text = element_text(size = 16),
-          axis.title.y = element_text(size = 16)) +
+          text = element_text(size = 20),
+          axis.title.y = element_text(size = 20)) +
     guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 })
 
-
-bio11.exclASIA.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom')
-ggsave(bio11.exclASIA.plt, filename = '../figures/growthParametersVSbio11.excludeASIA.pdf', width = 10.5, height = 10.5)
+bio11.exclASIA.plt <- ggarrange(plotlist = bio11.plt.lst, nrow = 2, ncol = 2, common.legend = T, legend = 'bottom', labels = 'AUTO', font.label = list(size = 20))
+ggsave(bio11.exclASIA.plt, filename = '../figures/growthParametersVSbio11.excludeASIA.pdf', width = 14, height = 14)
 ```
