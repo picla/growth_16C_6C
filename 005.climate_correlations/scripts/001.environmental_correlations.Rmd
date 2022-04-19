@@ -442,36 +442,36 @@ coefVar.labels <- c('M0' = expression(paste('initial size (', italic('M0'), ') C
 
 # correlate coefficients of variance for each growth parameter against bio11
 # bio11 correlation plots
-  r_response.CV <- phenoClim %>%
-    select(accession, r_response) %>%
-    left_join(select(meta, accession, group), by = 'accession') %>%
-    drop_na() %>%
-    group_by(group) %>%
-    summarise(r_response.CV = coefVar(r_response))
+r_response.CV <- phenoClim %>%
+  select(accession, r_response) %>%
+  left_join(select(meta, accession, group), by = 'accession') %>%
+  drop_na() %>%
+  group_by(group) %>%
+  summarise(r_response.CV = coefVar(r_response))
   
-  bio11.median <-  phenoClim %>%
-    select(accession, bio_11) %>%
-    left_join(select(meta, accession, group), by = 'accession') %>%
-    drop_na() %>%
-    group_by(group) %>%
-    summarise(bio11.median = median(bio_11))
-  
+bio11.median <-  phenoClim %>%
+  select(accession, bio_11) %>%
+  left_join(select(meta, accession, group), by = 'accession') %>%
+  drop_na() %>%
+  group_by(group) %>%
+  summarise(bio11.median = median(bio_11))
+
 r_response_bio11.CV.plt <- r_response.CV %>%
-    left_join(bio11.median, by = 'group') %>%
-    ggplot(aes(x = bio11.median, y = r_response.CV)) +
-    geom_point(aes(color = group)) +
-    scale_color_manual(values = admx.col.lst,
-                       labels = admx.labels.lst) +
-    geom_smooth(method = 'lm', se = F, color = 'grey') +
-    stat_cor(method = 'pearson', size = 5, label.x.npc = 0.82, label.y.npc = 'top') +
-    theme_classic() +
-    labs(x = 'median winter temp. (ºC)',
-         y = coefVar.labels['r_response'],
-         color = 'subpopulation') +
-    theme(legend.position = 'bottom',
-          text = element_text(size = 16),
-          axis.title.y = element_text(size = 16)) +
-    guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
+  left_join(bio11.median, by = 'group') %>%
+  ggplot(aes(x = bio11.median, y = r_response.CV)) +
+  geom_point(aes(color = group)) +
+  scale_color_manual(values = admx.col.lst,
+                     labels = admx.labels.lst) +
+  geom_smooth(method = 'lm', se = F, color = 'grey') +
+  stat_cor(method = 'pearson', size = 5, label.x.npc = 0.82, label.y.npc = 'top') +
+  theme_classic() +
+  labs(x = 'median winter temp. (ºC)',
+       y = coefVar.labels['r_response'],
+       color = 'subpopulation') +
+  theme(legend.position = 'bottom',
+        text = element_text(size = 16),
+        axis.title.y = element_text(size = 16)) +
+  guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 
 ggsave(r_response_bio11.CV.plt, filename = '../figures/r_responseCoefVarVSbio11.pdf', width = 10.5, height = 10.5)
 ```
