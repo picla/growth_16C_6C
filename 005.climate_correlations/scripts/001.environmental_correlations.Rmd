@@ -385,12 +385,9 @@ bio11_r_resp.exclSWE.plt <- phenoClim %>%
        y = pheno.labels['r_response'],
        color = 'subpopulation') +
   theme(legend.position = 'bottom',
-        text = element_text(size = 16),
-        axis.title.y = element_text(size = 16)) +
+        text = element_text(size = 20),
+        axis.title.y = element_text(size = 20)) +
   guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
-
-
-ggsave(bio11_r_resp.exclSWE.plt, filename = '../figures/r_responseVSbio11.excludeSWE.pdf', width = 10.5, height = 10.5)
 ```
 
 ```{r growth parameters vs bio11 - only Swedish accessions}
@@ -411,26 +408,15 @@ bio11_r_resp.onlySWE.plt <- phenoClim %>%
        y = pheno.labels['r_response'],
        color = 'subpopulation') +
   theme(legend.position = 'bottom',
-        text = element_text(size = 16),
-        axis.title.y = element_text(size = 16)) +
+        text = element_text(size = 20),
+        axis.title.y = element_text(size = 20)) +
   guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
-
-ggsave(bio11_r_resp.onlySWE.plt, filename = '../figures/r_responseVSbio11.onlySWE.pdf', width = 10.5, height = 10.5)
-```
-
-```{r combine figures of only Swedish and without Swedisch accessions}
-bio11_r_resp.comboSWE.plt <- ggarrange(bio11_r_resp.onlylSWE.plt +
-                                           scale_color_manual(values = admx.col.lst,
-                                                              labels = admx.labels.lst),
-                                       bio11_r_resp.exclSWE.plt +
-                                           scale_color_manual(values = admx.col.lst,
-                                                              labels = admx.labels.lst),
-                                       labels = 'AUTO', ncol = 2, nrow = 1, common.legend = T, legend = 'bottom')
-ggsave(bio11_r_resp.comboSWE.plt, filename = '../figures/r_responseVSbio11.comboSWE.pdf', width = 10.5, height = 5.25)
 ```
 
 
-```{r coefficient of varaince of each growth parametr vs bio11}
+
+
+```{r coefficient of variance of r_response vs median bio11}
 coefVar<- function(x){
   cv <- sd(x)/mean(x)
   return(cv)}
@@ -463,19 +449,30 @@ r_response_bio11.CV.plt <- r_response.CV %>%
   scale_color_manual(values = admx.col.lst,
                      labels = admx.labels.lst) +
   geom_smooth(method = 'lm', se = F, color = 'grey') +
-  stat_cor(method = 'pearson', size = 5, label.x.npc = 0.82, label.y.npc = 'top') +
+  stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
   theme_classic() +
   labs(x = 'median winter temp. (ºC)',
        y = coefVar.labels['r_response'],
        color = 'subpopulation') +
   theme(legend.position = 'bottom',
-        text = element_text(size = 16),
-        axis.title.y = element_text(size = 16)) +
+        text = element_text(size = 20),
+        axis.title.y = element_text(size = 20)) +
+  ylim(0, 0.15) +
   guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
-
-ggsave(r_response_bio11.CV.plt, filename = '../figures/r_responseCoefVarVSbio11.pdf', width = 10.5, height = 10.5)
 ```
 
+
+```{r combine figures of only Swedish, without Swedisch accessions and coefficient of variance}
+bio11_r_resp.comboSWE.plt <- ggarrange(r_response_bio11.CV.plt,
+                                       bio11_r_resp.exclSWE.plt +
+                                           scale_color_manual(values = admx.col.lst,
+                                                              labels = admx.labels.lst),
+                                       bio11_r_resp.onlySWE.plt +
+                                           scale_color_manual(values = admx.col.lst,
+                                                              labels = admx.labels.lst),
+                                       labels = 'AUTO', ncol = 3, nrow = 1, common.legend = T, legend = 'bottom', font.label = list(size = 20))
+ggsave(bio11_r_resp.comboSWE.plt, filename = '../figures/r_responseVSbio11.comboSWE.pdf', width = 21, height = 7)
+```
 
 ```{r growth parameters vs bio11 - exclude Asian accessions}
 # bio11 correlation plots
