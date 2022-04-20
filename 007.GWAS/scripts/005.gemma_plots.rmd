@@ -144,12 +144,12 @@ plt.lst <- map(c('M0', 'r_6C', 'r_response'), function(pheno.name){
   plt.manhattan <- plot.manhattan(gwas.result$chr, gwas.result$ps, gwas.result$p_lrt, gwas.result$af) +
     ggtitle(pheno.labels[pheno.name]) +
     xlab(' ') +
-    theme(text=element_text(size = 24))
+    theme(text=element_text(size = 22))
 
   
   plt.qq <- plot.qq(gwas.result$p_lrt) +
       ggtitle(' ') +
-      theme(text=element_text(size = 24))
+      theme(text=element_text(size = 22))
   
   plot.lst <- list('manhattan' = plt.manhattan,
                    'qq' = plt.qq)
@@ -161,7 +161,7 @@ png('../figures/manhattan_qqplot_M0_r_6C_r_response.png', width = 1440, height =
 print(plot_grid(plotlist = list(plt.lst$M0$manhattan, plt.lst$M0$qq,
                                 plt.lst$r_6C$manhattan, plt.lst$r_6C$qq,
                                 plt.lst$r_response$manhattan, plt.lst$r_response$qq),
-                label_size = 24, ncol = 2, rel_widths = c(3,1), align = 'hv', labels = 'AUTO'))
+                label_size = 22, ncol = 2, rel_widths = c(3,1), align = 'hv', labels = 'AUTO'))
 dev.off()
 ```
 
