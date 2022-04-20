@@ -19,6 +19,12 @@ gwas.files <- list.files(path = '../results/', pattern = '*.assoc.txt', full.nam
 
 # growth phenotypes
 growth <- read_csv('../../003.growth_parameters/results/phenotypes.csv')
+
+# create phenotype labels
+pheno.labels <- c('M0' = expression(paste('initial size (', italic('M0'), ')')),
+                  'r_16C' = expression(paste('growth rate (', italic('r'), ') 16ºC')),
+                  'r_6C' = expression(paste('growth rate (', italic('r'), ') 6ºC')),
+                  'r_response' = expression(paste('growth rate (', italic('r'), ') temp. response')))
 ```
 
 ```{r functions}
@@ -116,34 +122,34 @@ gwas.result <- read_delim(gwas.files[grep('r_16C', gwas.files)], delim = '\t')
 pheno.lab <- expression(paste('growth rate (', italic('r'), ') 16ºC'))
 r_16C.manhattan <- plot.manhattan(gwas.result$chr, gwas.result$ps, gwas.result$p_lrt, gwas.result$af) +
       xlab(' ') +
-      theme(text=element_text(size = 30))
+      theme(text=element_text(size = 24))
     
 r_16C.QQ <- plot.qq(gwas.result$p_lrt) +
-      theme(text=element_text(size = 30))
+      theme(text=element_text(size = 24))
 
-png('../figures/r_16C_manhattan_qqplot_nlme.full.png', width = 1440, height = 480)
-print(plot_grid(plotlist = list(r_16C.manhattan, r_16C.QQ), label_size = 36, ncol = 2, rel_widths = c(3,1), align = 'hv'))
+png('../figures/r_16C_manhattan_qqplot.png', width = 1440, height = 480)
+print(plot_grid(plotlist = list(r_16C.manhattan, r_16C.QQ), label_size = 24, ncol = 2, rel_widths = c(3,1), align = 'hv', labels = 'AUTO'))
 dev.off()
 
 ```
 
 ```{r GWAS plots initial size, growth rate in 6C and growth temperature response}
 plt.lst <- map(c('M0', 'r_6C', 'r_response'), function(pheno.name){
-  pheno.lab <- pheno.descr %>%
-    filter(phenotype == !!pheno.name) %>%
-    pull(description)
-  if (pheno.lab ==  'growth rate (r) temp. response'){pheno.lab <- expression(paste(Delta, " growth rate (r)"))}
+  #pheno.lab <- pheno.descr %>%
+  #  filter(phenotype == !!pheno.name) %>%
+  #  pull(description)
+  #if (pheno.lab ==  'growth rate (r) temp. response'){pheno.lab <- expression(paste(Delta, " growth rate (r)"))}
   
   gwas.result <- read_delim(paste0('/groups/nordborg/projects/cold_adaptation_16Cvs6C/002.growth/007.GWAS/003.results/002.gemma/', pheno.name,  '.assoc.txt'), delim = '\t')
   plt.manhattan <- plot.manhattan(gwas.result$chr, gwas.result$ps, gwas.result$p_lrt, gwas.result$af) +
-    ggtitle(pheno.lab) +
+    ggtitle(pheno.labels[pheno.name]) +
     xlab(' ') +
-    theme(text=element_text(size = 30))
+    theme(text=element_text(size = 24))
 
   
   plt.qq <- plot.qq(gwas.result$p_lrt) +
       ggtitle(' ') +
-      theme(text=element_text(size = 30))
+      theme(text=element_text(size = 24))
   
   plot.lst <- list('manhattan' = plt.manhattan,
                    'qq' = plt.qq)
@@ -151,11 +157,11 @@ plt.lst <- map(c('M0', 'r_6C', 'r_response'), function(pheno.name){
 })
 names(plt.lst) <- c('M0', 'r_6C', 'r_response')
 
-png('../figures/manhattan_qqplot_M0_r_6C_r_response_nlme.full.png', width = 1440, height = 960)
+png('../figures/manhattan_qqplot_M0_r_6C_r_response.png', width = 1440, height = 960)
 print(plot_grid(plotlist = list(plt.lst$M0$manhattan, plt.lst$M0$qq,
                                 plt.lst$r_6C$manhattan, plt.lst$r_6C$qq,
                                 plt.lst$r_response$manhattan, plt.lst$r_response$qq),
-                label_size = 36, ncol = 2, rel_widths = c(3,1), align = 'hv'))
+                label_size = 24, ncol = 2, rel_widths = c(3,1), align = 'hv', labels = 'AUTO'))
 dev.off()
 ```
 
