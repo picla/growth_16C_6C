@@ -379,14 +379,14 @@ bio11_r_resp.exclSWE.plt <- phenoClim %>%
   scale_color_manual(values = admx.col.lst[!(names(admx.col.lst) %in% c('north_sweden', 'south_sweden'))],
                      labels = admx.labels.lst[!(names(admx.labels.lst) %in% c('north_sweden', 'south_sweden'))]) +
   geom_smooth(method = 'lm', se = F, color = 'grey') +
-  stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
+  stat_cor(method = 'pearson', size = 6, label.x.npc = 0, label.y.npc = 1) +
   theme_classic() +
   labs(x = 'winter temp. (ºC)',
        y = pheno.labels['r_response'],
        color = 'subpopulation') +
   theme(legend.position = 'bottom',
-        text = element_text(size = 20),
-        axis.title.y = element_text(size = 20)) +
+        legend.text = element_text(size = 20),
+        text = element_text(size = 22)) +
   guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 ```
 
@@ -402,14 +402,14 @@ bio11_r_resp.onlySWE.plt <- phenoClim %>%
   scale_color_manual(values = admx.col.lst[(names(admx.col.lst) %in% c('north_sweden', 'south_sweden'))],
                      labels = admx.labels.lst[(names(admx.labels.lst) %in% c('north_sweden', 'south_sweden'))]) +
   geom_smooth(method = 'lm', se = F, color = 'grey') +
-  stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
+  stat_cor(method = 'pearson', size = 6, label.x.npc = 0, label.y.npc = 1) +
   theme_classic() +
   labs(x = 'winter temp. (ºC)',
        y = pheno.labels['r_response'],
        color = 'subpopulation') +
   theme(legend.position = 'bottom',
-        text = element_text(size = 20),
-        axis.title.y = element_text(size = 20)) +
+        legend.text = element_text(size = 20),
+        text = element_text(size = 22)) +
   guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 ```
 
@@ -449,14 +449,14 @@ r_response_bio11.CV.plt <- r_response.CV %>%
   scale_color_manual(values = admx.col.lst,
                      labels = admx.labels.lst) +
   geom_smooth(method = 'lm', se = F, color = 'grey') +
-  stat_cor(method = 'pearson', size = 5, label.x.npc = 0, label.y.npc = 1) +
+  stat_cor(method = 'pearson', size = 6, label.x.npc = 0, label.y.npc = 1) +
   theme_classic() +
   labs(x = 'median winter temp. (ºC)',
        y = coefVar.labels['r_response'],
        color = 'subpopulation') +
   theme(legend.position = 'bottom',
-        text = element_text(size = 20),
-        axis.title.y = element_text(size = 20)) +
+        legend.text = element_text(size = 20),
+        text = element_text(size = 22)) +
   ylim(0, 0.15) +
   guides(color = guide_legend(title.position = 'left', title.vjust = 0.85))
 ```
@@ -470,7 +470,7 @@ bio11_r_resp.comboSWE.plt <- ggarrange(r_response_bio11.CV.plt,
                                        bio11_r_resp.onlySWE.plt +
                                            scale_color_manual(values = admx.col.lst,
                                                               labels = admx.labels.lst),
-                                       labels = 'AUTO', ncol = 3, nrow = 1, common.legend = T, legend = 'bottom', font.label = list(size = 20))
+                                       labels = 'AUTO', ncol = 3, nrow = 1, common.legend = T, legend = 'bottom', font.label = list(size = 22))
 ggsave(bio11_r_resp.comboSWE.plt, filename = '../figures/r_responseVSbio11.comboSWE.pdf', width = 21, height = 7)
 ```
 
