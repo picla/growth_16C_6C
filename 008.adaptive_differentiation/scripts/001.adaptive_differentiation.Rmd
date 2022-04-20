@@ -201,15 +201,15 @@ write_csv(Qpc.pvals, file = '../results/quaint_pvalues.csv')
 
 ```{r plot M0 vs PC6, r_16C vs PC5 r_response vs PC5 in combined figure, message = F}
 M0_PC6.plt <- quaint.plt.lst$M0$PC6 +
-  theme(text = element_text(size = 22))
+  theme(text = element_text(size = 24))
 
 r_16C_PC5.plt <- quaint.plt.lst$r_16C$PC5 +
-  theme(text = element_text(size = 22))
+  theme(text = element_text(size = 24))
 
 r_response_PC5.plt <- quaint.plt.lst$r_response$PC5 +
-  theme(text = element_text(size = 22))
+  theme(text = element_text(size = 24))
 
-combo.plt <- ggarrange(M0_PC6.plt, r_16C_PC5.plt, r_response_PC5.plt, common.legend = T, legend = 'bottom', ncol = 3, labels = 'AUTO', font.label = list(size = 22))
+combo.plt <- ggarrange(M0_PC6.plt, r_16C_PC5.plt, r_response_PC5.plt, common.legend = T, legend = 'bottom', ncol = 3, labels = 'AUTO', font.label = list(size = 24))
 
 
 ggsave(filename = '../figures/quaint_M0_16C_PC6_r_16C_resp_PC1_PC5.pdf',
