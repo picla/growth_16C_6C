@@ -159,6 +159,7 @@ clusters.bio11.plt.lst <- map(unique(cluster.annotation$cluster), function(clstr
     ggplot(aes(x = bio_11, y = expression.scaled, color = temperature)) +
     geom_point() +
     geom_line(aes(group = interaction(gene, temperature, replicate)), size = 0.1, alpha = 0.5) +
+    geom_smooth(method = 'lm', se = F, size = 4, col = 'black', aes(group = temperature)) +
     geom_smooth(method = 'lm', se = F, size = 2) +
     stat_cor(method = 'pearson', size = 10) +
     labs(x = 'winter temperature (ºC)',
