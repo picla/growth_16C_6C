@@ -1,0 +1,49 @@
+Probe Set,AGI,Annotation,Sub-role,E2,E24,coldResponsive,expressionClass
+265221_s_at,At2g02010,putative glutamate decarboxylase,amino acid,3.5,4.6,,
+253203_at,At4g34710,arginine decarboxylase (SPE2/ADC2),amino acid,4.3,4,,
+260399_at,At1g72520,putative lipoxygenase,lipid,6.5,3.7,,
+253285_at,At4g34250,"fatty acid elongase 1 (FAE1), putative",lipid,2.6,2.8,,
+245422_at,At4g17470,"palmitoyl protein thioesterase precursor, putative",lipid,18.4,7,,
+257641_s_at,At3g25760,"allene oxide cyclase (AOC1, ERD12)",lipid,2.6,3.5,,
+254234_at,At4g23680,putative major latex protein,secondary,13.9,11.3,,
+254283_s_at,At4g22870,putative anthocyanidin synthase,secondary,4.9,6.5,,
+251124_s_at,At5g01040,laccase (diphenol oxidase) family,secondary,2.6,2.8,,
+258299_at,At3g23410,alcohol oxidase-related,secondary,2.8,2.5,x,1
+249215_at,At5g42800,dihydroflavonol 4-reductase (dihydrokaempferol 4-reductase) (DFR),secondary,5.7,4.9,,
+248185_at,At5g54060,flavonol 3-O-glucosyltransferase-like,secondary,6.5,5.7,,
+265208_at,At2g36690,"oxidoreductase, 2OG-Fe(II) oxygenase family protein",secondary,3.5,2.5,,
+245624_at,At4g14090,putative glucosyltransferase,secondary,3.2,7,,
+265091_s_at,At1g03495,similar to anthocyanin 5-aromatic acyltransferase,secondary,7.5,9.2,,
+247655_at,At5g59820,ZAT12,mRNA synthesis,111.4,97,,
+245628_at,At1g56650,MYB family transcription factor (MYB75),mRNA synthesis,4.6,3,,
+251677_at,At3g56980,bHLH protein family,mRNA synthesis,2.8,3,,
+263549_at,At2g21650,MYB family transcription factor,mRNA synthesis,3.2,2.8,,
+254242_at,At4g23200,putatve serine/threonine protein kinase,signal transduction,3,3.2,,
+257294_at,At3g15570,phototropic response protein family,signal transduction,3.5,3,,
+248270_at,At5g53450,protein kinase (ORG1),signaling,2.5,2.5,,
+246099_at,At5g20230,plastocyanin-like domain containing protein,photosynthesis,4.9,2.5,,
+266772_s_at,At2g03020,TonB-dependent receptor proteins signature,transport,3.7,4.6,,
+264400_at,At1g61800,"glucose-6-phosphate/phosphate-translocator, putative",transport,7,42.2,,
+253331_at,At4g33490,"nucellin protein, putative",proteolysis,2.6,2.8,,
+260551_at,At2g43510,putative trypsin inhibitor,defense,3.2,3.2,,
+266141_at,At2g02120,putative plant defensin protein putative (PDF2.1),defense,4.3,2.6,x,3
+252076_at,At3g51660,LS1-like protein,defense,3.5,2.8,,
+260556_at,At2g43620,putative endochitinase,defense,6.1,6.1,x,3
+266385_at,At2g14610,pathogenesis-related protein 1 (PR-1),defense,4,7,,
+250670_at,At5g06860,polygalacturonase inhibiting protein (PGIP1),defense,3.7,5.7,x,4
+250083_at,At5g17220,"glutathione transferase, putative",detoxification,6.1,6.5,,
+254832_at,At4g12490,pEARLI 1-like protein,unknown,7,13.9,x,4
+254314_at,At4g22470,protease inhibitor/seed storage/lipid transfer protein (LTP) family,unknown,3.5,2.6,x,4
+254805_at,At4g12480,pEARLI 1,unknown,4.9,3.7,x,4
+254819_at,At4g12500,pEARLI 1-like protein,unknown,3.7,4.6,x,4
+254818_at,At4g12470,pEARLI 1-like protein,unknown,8.6,4.6,x,3
+255524_at,At4g02330,pectinesterase family,cell wall,3.5,4.9,x,4
+246002_at,At5g20740,putative ripening-related protein,cell wall,3,2.6,,
+256522_at,At1g66160,expressed protein,unknown,2.8,2.5,,
+261033_at,At1g17380,expressed protein,unknown,2.5,3,,
+264616_at,At2g17740,"CHP-rich zinc finger protein, putative",unknown,2.6,3.2,,
+266368_at,At2g41380,putative embryo-abundant protein,unknown,13,32,,
+262902_x_at,At1g59930,hypothetical protein,unknown,26,27.9,,
+263467_at,At2g31730,expressed protein,unknown,4.9,5.3,,
+263851_at,At2g04460,hypothetical protein,unknown,8.6,4,,
+266316_at,At2g27080,unknown protein,unknown,3.5,2.8,,
