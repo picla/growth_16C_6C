@@ -3,11 +3,15 @@
 .RData
 .Ruserdata
 
-# ignore data files
-001.data/
-
 # ignore R project file
 *.Rproj
 
 # ignore results files
 **/results/*
+
+# ignore data files > 100MB
+001.data/all_chromosomes_binary_gzip_attrs.hdf5
+001.data/Araport11_GFF3_genes_transposons.201606.gff
+
+# ignore figures
+**/figures/*
