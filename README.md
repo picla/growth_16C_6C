@@ -10,5 +10,5 @@ We investigated early vegetative growth of natural Arabidopsis thaliana accessio
 All experimental details are described in [the publication of this study](https://www.biorxiv.org/content/10.1101/2022.02.15.480488v2).
 
 ## Data files <a name="DataFiles"></a>
-DEscription fo the datafiles and where to get them is [here](https://github.com/picla/growth_16C_6C/blob/main/001.data/README.md).
+Description fo the datafiles and where to get them is [here](https://github.com/picla/growth_16C_6C/blob/main/001.data/README.md).
 
