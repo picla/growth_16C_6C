@@ -17,8 +17,6 @@
 [kinship_ibs_binary_mac5.h5py](kinship_ibs_binary_mac5.h5py)
     The kinship matrix used for population structure correction of the climate correlations.
 
-
-
 ## growth
 [rawdata_combined_annotation.txt](rawdata_combined_annotation.txt)
     Raw phenotyping data with meta-information annotated.
@@ -29,7 +27,9 @@
 
 ## transcriptome
 [RNAseq_samples.txt](RNAseq_samples.txt)
-    Meta-information for the RNA-seq samples. 
+    Meta-information for the RNA-seq samples.
+
+[RNA-seq data on SRA](http://www.ncbi.nlm.nih.gov/bioproject/807069)
 
 [CBF_regulon_DOWN_ParkEtAl2015.txt](CBF_regulon_DOWN_ParkEtAl2015.txt)
 
