@@ -251,3 +251,242 @@ ggsave(bio11.cor.plt, file = '../figures/cluster_proportion_bio11_cor.pdf')
 
 ```
 
+
+```{r permutations - generate data}
+library(arrangements)
+n <- 10000
+# winter temperature permutations
+bio_11.acns <- worldclim %>%
+      dplyr::select(accession, bio_11) %>%
+      filter(accession %in% counts.varStab$accession)
+
+bio_11.perm.mtrx <- permutations(bio_11.acns$bio_11, nsample = n, layout = 'column')
+colnames(bio_11.perm.mtrx) <- paste('perm', c(1:n), sep = '_')
+
+bio_11.perm <- as_tibble(bio_11.perm.mtrx) %>%
+  mutate(accession = bio_11.acns$accession) %>%
+  dplyr::select(accession, everything())
+
+# gather correlation data
+counts.varStab.long <- counts.varStab %>%
+  mutate(accession = as.factor(accession)) %>%
+  pivot_longer(cols = matches('AT.G.{5}'), names_to = 'gene', values_to = 'expression') %>%
+  filter(gene %in% cold_acclimation_genes) %>%
+  left_join(., as_tibble(cluster.annotation, rownames = 'gene'), by = 'gene') %>%
+  dplyr::select(-sample) %>%
+  group_by(gene) %>%
+  mutate(expression.scaled = as.numeric(scale(expression))) %>%
+  ungroup()
+
+
+
+expr.bio_11 <- map(colnames(bio_11.perm.mtrx), function(perm){
+  counts.perm <- counts.varStab.long %>%
+    left_join(., dplyr::select(bio_11.perm, 'accession', all_of(perm)), by = 'accession')
+  colnames(counts.perm)[7] <- 'bio_11'
+  
+  return(counts.perm)
+})
+
+```
+
+
+```{r permutations - correlations}
+library(furrr)
+clusters <- cluster.annotation %>% pull(cluster) %>% unique()
+
+plan(multisession, workers = 10)
+
+r.permutations <- future_map(expr.bio_11, function(expr.bio_11.perm){
+  map(c('16C', '6C'), function(temp){
+    map(clusters, function(clstr){
+      expr.bio_11.perm.temp.clstr <- expr.bio_11.perm %>%
+        filter(temperature == !!temp & cluster == !!clstr)
+      
+      r.temp.clstr <- cor.test(x = expr.bio_11.perm.temp.clstr$bio_11, y = expr.bio_11.perm.temp.clstr$expression.scaled)
+      r.tbl <- tibble('temperature' = temp, 'cluster' = clstr, r = as.numeric(r.temp.clstr$estimate))
+      }) %>%
+      bind_rows()
+    }) %>%
+    bind_rows()
+  }) %>%
+  bind_rows()
+
+write_csv(r.permutations, file = '~/GitRepos/growth_16C_6C/006.gene_expression/results/permutation_correlations.csv')
+
+
+```
+
+```{r true correlations}
+r.correlations <- map(clusters, function(clstr){
+  map(c('16C', '6C'), function(temp){
+    expr.bio11.temp.clstr <- counts.varStab.long %>%
+      filter(cluster == !!clstr & temperature == !!temp) %>%
+      left_join(., dplyr::select(worldclim, accession, bio_11), by = 'accession')
+    
+    r.temp.clstr <- cor.test(x = expr.bio11.temp.clstr$bio_11, y = expr.bio11.temp.clstr$expression.scaled)
+    r.tbl <- tibble('temperature' = temp, 'cluster' = clstr, r = as.numeric(r.temp.clstr$estimate))
+  }) %>%
+    bind_rows()
+}) %>%
+bind_rows()
+
+
+```
+
+
+
+```{r permutations - test}
+permutation.test.result <- map(clusters, function(clstr){
+  map(c('16C', '6C'), function(temp){
+    r.temp.clstr <- r.permutations %>%
+      filter(cluster == !!clstr & temperature == !!temp)
+    
+    perm.qt <- quantile(x = r.temp.clstr$r, probs = c(0.025, 0.975))
+    r <- r.correlations %>%
+      filter(cluster == !!clstr & temperature == !!temp) %>%
+      pull(r)
+    
+    test.result <- ifelse(r < perm.qt[1] | r > perm.qt[2], '< 0.05', '= N.S.')
+    test.result.tbl <- tibble('cluster' = clstr, 'temperature' = temp, 'r' = r, 'pvalue' = test.result, 'CI' = paste(round(perm.qt, digits = 3), collapse = ':'))
+  }) %>%
+    bind_rows()
+}) %>%
+  bind_rows()
+```
+
+```{r cluster specific expression - permutation-based p-values }
+clusters.bio11.plt.lst <- map(clusters, function(clstr){
+  r.16C <- permutation.test.result %>% filter(cluster == !!clstr & temperature == '16C') %>% pull(r)
+  r.6C <- permutation.test.result %>% filter(cluster == !!clstr & temperature == '6C') %>% pull(r)
+  pval.16C <- permutation.test.result %>% filter(cluster == !!clstr & temperature == '16C') %>% pull(pvalue)
+  pval.6C <- permutation.test.result %>% filter(cluster == !!clstr & temperature == '6C') %>% pull(pvalue)
+
+      expr.bio_11.clstr <- counts.varStab.long %>%
+        filter(cluster == !!clstr) %>%
+        left_join(., dplyr::select(worldclim, accession, bio_11), by = 'accession')
+      
+      clstr.bio11.plt  <- expr.bio_11.clstr %>%
+      ggplot(aes(x = bio_11, y = expression.scaled, color = temperature)) +
+      geom_point() +
+      geom_line(aes(group = interaction(gene, temperature, replicate)), size = 0.1, alpha = 0.5) +
+      geom_smooth(method = 'lm', se = F, size = 4, col = 'black', aes(group = temperature)) +
+      geom_smooth(method = 'lm', se = F, size = 2) +
+      annotate(geom = 'text', x = -5, y = max(expr.bio_11.clstr$expression.scaled) + 0.5, hjust = 0,
+               label = paste0('r = ', round(r.16C, digits = 2), ', p-value ', pval.16C),
+               colour = '#F8766D', size = 10) +
+        annotate(geom = 'text', x = -5, y = max(expr.bio_11.clstr$expression.scaled) + 0.5, hjust = 0, vjust = 2,
+                 label = paste0('r = ', round(r.6C, digits = 2), ', p-value ', pval.6C),
+                 colour = '#00BFC4', size = 10) +
+            labs(x = 'winter temperature (ºC)',
+         y = 'gene-wide standardized expression',
+         title = paste('cluster', clstr)) +
+    theme_classic() +
+    theme(text = element_text(size = 24))
+
+  print(clstr.bio11.plt)
+  return(clstr.bio11.plt)
+})
+
+# combine plots
+clstr.bio11.combo.manuscript <- ggarrange(plotlist = clusters.bio11.plt.lst,
+                                          ncol = 2,
+                                          nrow = 4,
+                                          common.legend = T,
+                                          legend = 'bottom')
+
+ggsave(filename = '../figures/cold_acclimation_bio11_clusters_combo_manuscript_permutation.pdf',
+      plot = clstr.bio11.combo.manuscript,
+      width = 28,
+      height = 28)
+```
+```{r correlations - background genes}
+plan(multisession, workers = 10)
+
+# random sets
+n = 10000
+
+counts.varStab.backgrnd.long <- counts.varStab %>%
+  mutate(accession = as.factor(accession)) %>%
+  pivot_longer(cols = matches('AT.G.{5}'), names_to = 'gene', values_to = 'expression') %>%
+  filter(!(gene %in% cold_acclimation_genes)) %>%
+  dplyr::select(-sample) %>%
+  group_by(gene) %>%
+  mutate(expression.scaled = as.numeric(scale(expression))) %>%
+  ungroup()
+
+# random gene sets
+genes.backgrnd <- unique(counts.varStab.backgrnd.long$gene)
+genes.backgrnd.random <- replicate(n, sample(genes.backgrnd, size = length(unique(counts.varStab.long$gene))), simplify=F)
+
+# gather correlation data
+expr.bio_11.backgrnd <- future_map(genes.backgrnd.random, function(genes){
+  replacement <- tibble('gene' = unique(counts.varStab.long$gene),
+                        'backgrnd' = genes)
+  counts.varStab.long %>%
+    left_join(., replacement, by = 'gene') %>%
+    dplyr::select(-gene, -expression, -expression.scaled) %>%
+    rename('gene' = backgrnd) %>%
+    left_join(., counts.varStab.backgrnd.long, by = c('accession', 'temperature', 'replicate', 'gene')) %>%
+    left_join(., dplyr::select(worldclim, accession, bio_11), by = 'accession')
+})
+
+# correlations
+r.backgrnd <- future_map(expr.bio_11.backgrnd, function(expr.bio_11){
+  map(c('16C', '6C'), function(temp){
+    map(clusters, function(clstr){
+      expr.bio_11.temp.clstr <- expr.bio_11 %>%
+        filter(temperature == !!temp & cluster == !!clstr)
+      
+      r.temp.clstr <- cor.test(x = expr.bio_11.temp.clstr$bio_11, y = expr.bio_11.temp.clstr$expression.scaled)
+      r.tbl <- tibble('temperature' = temp, 'cluster' = clstr, r = as.numeric(r.temp.clstr$estimate))
+      }) %>%
+      bind_rows()
+    }) %>%
+    bind_rows()
+}) %>% bind_rows()
+
+write_csv(r.backgrnd, file = '../results/expr.bio_11.backgroundGenes.csv')
+```
+
+```{r correlations test - background genes}
+backgrnd.test.result <- map(clusters, function(clstr){
+  map(c('16C', '6C'), function(temp){
+    r.temp.clstr <- r.backgrnd %>%
+      filter(cluster == !!clstr & temperature == !!temp)
+    
+    perm.qt <- quantile(x = r.temp.clstr$r, probs = c(0.025, 0.975))
+    r <- r.correlations %>%
+      filter(cluster == !!clstr & temperature == !!temp) %>%
+      pull(r)
+    
+    test.result <- ifelse(r < perm.qt[1] | r > perm.qt[2], '< 0.05', '= N.S.')
+    test.result.tbl <- tibble('cluster' = clstr, 'temperature' = temp, 'r' = r, 'pvalue' = test.result, 'CI' = paste(round(perm.qt, digits = 3), collapse = ':'))
+  }) %>%
+    bind_rows()
+}) %>%
+  bind_rows()
+
+
+
+```
+```{r plot correlation test - background genes}
+backgrnd.test.result.plt <- backgrnd.test.result %>%
+  separate(col = CI, into = c('upper', 'lower'), sep = ':', convert = T) %>%
+  ggplot(aes(x = cluster, y = r, col = temperature)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(x = cluster, group = temperature, ymin = lower, ymax = upper), width=.2,
+                 position=position_dodge(width = 0.5)) +
+  theme_classic() +
+  labs(y = 'correlation coefficient',
+       x = element_blank()) +
+  theme(text = element_text(size = 16))
+
+ggsave(plot = backgrnd.test.result.plt, filename = '../figures/bio_11_correlation_background.pdf')
+```
+
+
+
+
+
+
