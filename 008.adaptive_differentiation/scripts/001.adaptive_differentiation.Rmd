@@ -167,7 +167,7 @@ quaint.plt.lst <- map(phenotypes, function(pheno.name)
       geom_point(aes(color = group)) +
       scale_color_manual(values = admx.col.lst,
                          labels = admx.labels.lst) +
-      labs(x = paste0('PC', PC.nr), y = pheno.labels[pheno.name], color = 'subpopulation') +
+      labs(x = paste0(K.eigen.percs.lab[PC.nr]), y = pheno.labels[pheno.name], color = 'subpopulation') +
       theme_classic()
     print(PC.pheno.plt.admx)
     return(PC.pheno.plt.admx)
